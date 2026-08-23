@@ -1,0 +1,38 @@
+@import "tailwindcss";
+
+@layer base {
+  body {
+    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    letter-spacing: -0.01em;
+    color: #0f172a;
+    background-color: #f8fafc;
+  }
+
+  h1, h2, h3, .font-display {
+    font-family: 'Outfit', 'Plus Jakarta Sans', sans-serif;
+    letter-spacing: -0.025em;
+  }
+}
+
+/* Drifting photo wall (participant hero) — two rows scroll in opposite
+   directions. The row markup is duplicated, so shifting one copy-width
+   (-50%) loops seamlessly. Pauses on hover; respects reduced-motion. */
+@keyframes rubicon-drift-left {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
+}
+@keyframes rubicon-drift-right {
+  from { transform: translateX(-50%); }
+  to   { transform: translateX(0); }
+}
+.rb-drift {
+  display: flex;
+  width: max-content;
+  will-change: transform;
+}
+.rb-drift-left  { animation: rubicon-drift-left 70s linear infinite; }
+.rb-drift-right { animation: rubicon-drift-right 90s linear infinite; }
+.rb-wall:hover .rb-drift { animation-play-state: paused; }
+@media (prefers-reduced-motion: reduce) {
+  .rb-drift { animation: none; }
+}

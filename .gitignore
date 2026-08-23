@@ -1,0 +1,22 @@
+node_modules/
+build/
+dist/
+coverage/
+.DS_Store
+*.log
+.env*
+!.env.example
+
+# Python / Flask backend
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# Locally uploaded media (runtime data, regenerated per environment — not source)
+backend/storage/
+
+# Claude Code local-only settings
+.claude/settings.local.json

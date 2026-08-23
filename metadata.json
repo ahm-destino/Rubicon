@@ -1,0 +1,6 @@
+{
+  "name": "Rubicon",
+  "description": "The intelligent layer for event memories. Centralized event photo platform with AI face matching, multi-photographer ingestion, and organizer analytics.",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
