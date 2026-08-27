@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { api } from '../api';
 import { matchSelfieToPhotos, searchPhotosByParticipant } from '../utils/faceMatcher';
 import { downloadPhotosAsZip } from '../utils/zipDownloader';
@@ -34,35 +34,77 @@ export const ParticipantFinder = ({ event, participants, photos, onOpenLightbox 
 
   // Camera capture state
   const [isCameraActive, setIsCameraActive] = useState(false);
+  const [cameraStream, setCameraStream] = useState(null);
+  const [cameraError, setCameraError] = useState(null);
   const videoRef = useRef(null);
   const streamRef = useRef(null);
   const fileInputRef = useRef(null);
 
+  const cameraErrorMessage = (err) => {
+    switch (err?.name) {
+      case 'NotAllowedError':
+      case 'SecurityError':
+        return 'Camera permission is blocked. Allow camera access for this site in your browser settings, then tap "Take Live Selfie" again — or just use "Upload a selfie" below.';
+      case 'NotFoundError':
+      case 'OverconstrainedError':
+        return 'No camera was found on this device. Use "Upload a selfie" below instead.';
+      case 'NotReadableError':
+        return 'Your camera is being used by another app or tab. Close it and try again — or use "Upload a selfie" below.';
+      default:
+        return 'The camera could not start. If you opened this from a chat app (WhatsApp, Instagram, Facebook), open it in Safari or Chrome instead — or use "Upload a selfie" below.';
+    }
+  };
+
   const startCamera = async () => {
+    setCameraError(null);
+    // getUserMedia only exists in a secure context (HTTPS) and a real browser.
+    // In-app browsers (WhatsApp/Instagram/Facebook) often don't expose it at all.
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setCameraError(
+        'This browser is blocking the camera. If you opened the link from a chat app ' +
+        '(WhatsApp, Instagram, Facebook), tap its menu and choose "Open in browser" ' +
+        '(Safari or Chrome) — or just use "Upload a selfie" below, which can take a photo too.'
+      );
+      return;
+    }
     try {
       setIsCameraActive(true);
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { width: { ideal: 640 }, height: { ideal: 640 }, facingMode: 'user' },
       });
       streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-      }
+      setCameraStream(stream); // the <video> is attached in an effect, once it mounts
     } catch (err) {
       console.warn('Camera access error:', err);
-      alert('Camera access could not be initialized. Please upload a photo instead.');
       setIsCameraActive(false);
+      setCameraError(cameraErrorMessage(err));
     }
   };
 
+  // Attach the stream after the <video> has actually mounted. Setting srcObject
+  // inside startCamera raced the render — if getUserMedia resolved before React
+  // painted the element (common on phones once permission is already granted),
+  // videoRef.current was still null and the preview stayed black. Some mobile
+  // browsers also need an explicit play() even with the autoPlay attribute.
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!isCameraActive || !cameraStream || !video) return;
+    video.srcObject = cameraStream;
+    video.play?.().catch(() => {});
+  }, [isCameraActive, cameraStream]);
+
   const capturePhoto = () => {
-    if (!videoRef.current) return;
+    const video = videoRef.current;
+    if (!video || !video.videoWidth) {
+      setCameraError('The camera is still starting up — give it a second, then tap Capture again.');
+      return;
+    }
     const canvas = document.createElement('canvas');
-    canvas.width = videoRef.current.videoWidth || 640;
-    canvas.height = videoRef.current.videoHeight || 640;
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
     const ctx = canvas.getContext('2d');
     if (ctx) {
-      ctx.drawImage(videoRef.current, 0, 0);
+      ctx.drawImage(video, 0, 0);
       const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
       setSelfiePreview(dataUrl);
       setSelectedParticipant(null);
@@ -76,6 +118,7 @@ export const ParticipantFinder = ({ event, participants, photos, onOpenLightbox 
       streamRef.current.getTracks().forEach((track) => track.stop());
       streamRef.current = null;
     }
+    setCameraStream(null);
     setIsCameraActive(false);
   };
 
@@ -312,6 +355,12 @@ export const ParticipantFinder = ({ event, participants, photos, onOpenLightbox 
 
           {/* Unified Clean Finder Card */}
           <div className="max-w-xl mx-auto bg-white rounded-2xl border border-slate-200 shadow-sm p-6 sm:p-8 space-y-6">
+            {cameraError && (
+              <div className="bg-rose-50 border border-rose-200 rounded-2xl p-4 flex items-start space-x-2.5 text-xs text-rose-700">
+                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                <span>{cameraError}</span>
+              </div>
+            )}
             {!isCameraActive ? (
               <div className="space-y-4">
                 {/* Upload or Selfie Dropzone */}
