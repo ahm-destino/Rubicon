@@ -58,7 +58,7 @@ class Config:
     GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
     GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
     GOOGLE_OAUTH_REDIRECT_URI = os.getenv(
-        "GOOGLE_OAUTH_REDIRECT_URI", "http://localhost:5000/api/auth/google/callback"
+        "GOOGLE_OAUTH_REDIRECT_URI", "https://rubiconn.vercel.app/api/auth/google/callback"
     )
     GOOGLE_DISCOVERY_URL = "https://accounts.google.com/.well-known/openid-configuration"
     GOOGLE_PICKER_ENABLED = _bool("GOOGLE_PICKER_ENABLED")
@@ -73,7 +73,7 @@ class Config:
     # the callback straight to Flask would arrive without that cookie and fail state
     # validation. In dev, /api is proxied :3000 -> backend, so :3000 reaches Flask.
     GOOGLE_DRIVE_REDIRECT_URI = os.getenv(
-        "GOOGLE_DRIVE_REDIRECT_URI", "http://localhost:3000/api/auth/google/drive/callback"
+        "GOOGLE_DRIVE_REDIRECT_URI", "https://rubiconn.vercel.app/api/auth/google/drive/callback"
     )
     GOOGLE_DRIVE_SCOPE = "openid email https://www.googleapis.com/auth/drive.file"
 
