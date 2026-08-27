@@ -27,7 +27,7 @@ class Config:
     # Login rate limit (Flask-Limiter syntax).
     LOGIN_RATE_LIMIT = os.getenv("LOGIN_RATE_LIMIT", "10 per minute;50 per hour")
     CORS_ORIGINS = [
-        o.strip() for o in os.getenv("CORS_ORIGINS", "http://localhost:3000").split(",") if o.strip()
+        o.strip() for o in os.getenv("CORS_ORIGINS").split(",") if o.strip()
     ]
 
     # Database

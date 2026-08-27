@@ -79,6 +79,6 @@ def google_callback():
     db.session.commit()
 
     # Set the httpOnly cookie, then bounce back to the SPA (no token in the URL).
-    frontend = Config.CORS_ORIGINS[0] if Config.CORS_ORIGINS else "http://localhost:3000"
+    frontend = Config.CORS_ORIGINS[0] if Config.CORS_ORIGINS else "https://rubiconn.vercel.app"
     resp = redirect(frontend + "/")
     return set_auth_cookie(resp, user)
