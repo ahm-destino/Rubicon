@@ -9,6 +9,13 @@ def _bool(name: str, default: str = "0") -> bool:
     return os.getenv(name, default).strip().lower() in ("1", "true", "yes", "on")
 
 
+def _default_media_base_url() -> str:
+    """Dev: Vite (:3000) proxies /media to Flask. Prod: Railway serves /media."""
+    if os.getenv("FLASK_ENV", "production") == "development":
+        return "http://localhost:3000/media"
+    return "https://rubicon.up.railway.app/media"
+
+
 class Config:
     # Flask
     ENV = os.getenv("FLASK_ENV", "production")
@@ -43,7 +50,7 @@ class Config:
     # Storage abstraction
     STORAGE_BACKEND = os.getenv("STORAGE_BACKEND", "local")
     STORAGE_LOCAL_DIR = os.getenv("STORAGE_LOCAL_DIR", "./storage")
-    MEDIA_BASE_URL = os.getenv("MEDIA_BASE_URL", "http://localhost:5000/media").rstrip("/")
+    MEDIA_BASE_URL = os.getenv("MEDIA_BASE_URL", _default_media_base_url()).rstrip("/")
     S3_BUCKET = os.getenv("S3_BUCKET", "")
     S3_REGION = os.getenv("S3_REGION", "")
     GCS_BUCKET = os.getenv("GCS_BUCKET", "")
@@ -58,7 +65,7 @@ class Config:
     GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
     GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
     GOOGLE_OAUTH_REDIRECT_URI = os.getenv(
-        "GOOGLE_OAUTH_REDIRECT_URI", "https://rubiconn.up.railway.app/api/auth/google/callback"
+        "GOOGLE_OAUTH_REDIRECT_URI", "https://rubicon.up.railway.app/api/auth/google/callback"
     )
     GOOGLE_DISCOVERY_URL = "https://accounts.google.com/.well-known/openid-configuration"
     GOOGLE_PICKER_ENABLED = _bool("GOOGLE_PICKER_ENABLED")
@@ -73,7 +80,7 @@ class Config:
     # the callback straight to Flask would arrive without that cookie and fail state
     # validation. In dev, /api is proxied :3000 -> backend, so :3000 reaches Flask.
     GOOGLE_DRIVE_REDIRECT_URI = os.getenv(
-        "GOOGLE_DRIVE_REDIRECT_URI", "https://rubiconn.up.railway.app/api/auth/google/drive/callback"
+        "GOOGLE_DRIVE_REDIRECT_URI", "https://rubicon.up.railway.app/api/auth/google/drive/callback"
     )
     GOOGLE_DRIVE_SCOPE = "openid email https://www.googleapis.com/auth/drive.file"
 
