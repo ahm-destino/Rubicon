@@ -225,23 +225,23 @@ export default function App() {
             </div>
           </div>
 
-          {/* Executive Authority Signature */}
+          {/* Signature */}
           <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-xs">
             <div className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-slate-50 hover:bg-slate-100/80 border border-slate-200/90 shadow-xs transition-colors">
-              <span className="text-slate-500 font-medium">Engineered with precision by</span>
+              <span className="text-slate-500 font-medium">Built by</span>
               <a
                 href="https://kingsleydestiny.vercel.app"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="group inline-flex items-center gap-1 font-extrabold text-slate-900 hover:text-indigo-600 transition-colors"
+                className="group inline-flex items-center gap-1 font-bold text-slate-900 hover:text-indigo-600 transition-colors"
               >
                 <span>Destiny Kingsley</span>
                 <ArrowUpRight className="w-3 h-3 text-slate-400 group-hover:text-indigo-600 transition-colors" />
               </a>
-              <span className="text-slate-300 font-bold">·</span>
-              <span className="text-indigo-600 font-bold tracking-tight">The Ruby Group</span>
+              <span className="text-slate-400">from</span>
+              <span className="text-slate-900 font-bold tracking-tight">the Ruby Group</span>
             </div>
-            <span className="text-[11px] font-semibold text-slate-400">© 2026</span>
+            <span className="text-[11px] font-medium text-slate-400">· 2026</span>
           </div>
         </div>
       </footer>

@@ -1545,12 +1545,13 @@ export const AdminPanel = ({
                 </div>
 
                 {/* Creator Signature in QR frame */}
-                <div className="pt-2 flex items-center justify-center gap-1.5 text-[11px] text-slate-400">
-                  <span>Engineered by</span>
+                <div className="pt-2 flex items-center justify-center gap-1.5 text-xs text-slate-400">
+                  <span>Built by</span>
                   <span className="font-bold text-white">Destiny Kingsley</span>
-                  <span className="text-indigo-400 font-bold">·</span>
-                  <span className="font-bold text-indigo-400">The Ruby Group</span>
+                  <span>from</span>
+                  <span className="font-bold text-slate-200">the Ruby Group</span>
                 </div>
+
               </div>
             </div>
 
