@@ -77,6 +77,7 @@ export const AdminPanel = ({
   const [ingestionJobs, setIngestionJobs] = useState([]);
   const [uploadProgress, setUploadProgress] = useState({ done: 0, total: 0 });
   const [uploadError, setUploadError] = useState(null);
+  const [activePickerSession, setActivePickerSession] = useState(null);
   const uploadInputRef = useRef(null);
 
   // Real storage + vector-index stats ({ provider, vectorIndex }).
@@ -335,21 +336,34 @@ export const AdminPanel = ({
 
         try {
           // 1. Create session with backend
+          toast.info('Connecting to Google Photos...');
           const session = await api.createPickerSession(accessToken);
           if (!session.sessionId || !session.pickerUri) {
             throw new Error('Failed to create Google Photos picker session.');
           }
 
-          // 2. Open popup for user to pick photos
+          setActivePickerSession({
+            sessionId: session.sessionId,
+            pickerUri: session.pickerUri,
+            photographerId: activePhotographer.id,
+            sessionTag,
+            cameraInfo: activePhotographer.gear || 'Google Photos',
+          });
+
+          // 2. Attempt to open popup
           const popup = window.open(
             session.pickerUri,
             'rubicon_google_photos_picker',
-            'width=850,height=650,menubar=no,toolbar=no'
+            'width=900,height=700,menubar=no,toolbar=no'
           );
 
-          toast.info('Select photos in the Google Photos window and click Done.');
+          if (!popup || popup.closed || typeof popup.closed === 'undefined') {
+            toast.warn('Popup blocked by browser. Click "Open Selection Window" below.');
+          } else {
+            toast.info('Select photos in the Google Photos window and click Done.');
+          }
 
-          // 3. Poll until mediaItemsSet is true or popup is closed
+          // 3. Poll in background
           let isDone = false;
           const startTime = Date.now();
           while (!isDone) {
@@ -357,69 +371,70 @@ export const AdminPanel = ({
               throw new Error('Picker session timed out.');
             }
 
-            await new Promise((r) => setTimeout(r, 2000));
+            await new Promise((r) => setTimeout(r, 2500));
             try {
               const status = await api.pollPickerSession(session.sessionId);
               if (status.done) {
                 isDone = true;
                 if (popup && !popup.closed) popup.close();
-              } else if (popup && popup.closed) {
-                const lastCheck = await api.pollPickerSession(session.sessionId);
-                if (lastCheck.done) {
-                  isDone = true;
-                } else {
-                  toast.info('Picker window was closed.');
-                  setIsUploading(false);
-                  return;
-                }
               }
-            } catch (pollErr) {
-              if (popup && popup.closed) {
-                setIsUploading(false);
-                return;
-              }
+            } catch {
+              // Ignore interim network hiccups while polling
             }
           }
 
           // 4. Ingest the chosen photos
-          toast.info('Downloading and indexing photos from Google Photos...');
-          const resp = await api.ingestFromPicker(event.id, {
-            sessionId: session.sessionId,
-            photographerId: activePhotographer.id,
-            sessionTag,
-            cameraInfo: activePhotographer.gear || 'Google Photos',
-          });
-
-          const jobs = resp?.jobs || [];
-          setIngestionJobs((prev) => [...jobs, ...prev]);
-
-          // Remember new session tag
-          if (sessionTag && !(event.sessions || []).includes(sessionTag)) {
-            try {
-              await api.updateEvent(event.id, { sessions: [...(event.sessions || []), sessionTag] });
-            } catch { /* non-fatal */ }
-          }
-
-          const ok = jobs.filter((j) => j.stage !== 'error').length;
-          const failed = jobs.filter((j) => j.stage === 'error').length;
-
-          if (ok) toast.success(`Indexed ${ok} photo${ok === 1 ? '' : 's'} from Google Photos${failed ? ` · ${failed} failed` : ''}.`);
-          else if (failed) toast.error(`Failed to ingest ${failed} photo${failed === 1 ? '' : 's'}.`);
-          else toast.info('No photos selected.');
-
-          onUploadPhotos();
-          loadStorage();
+          await executePickerIngest(session.sessionId, activePhotographer.id, sessionTag, activePhotographer.gear || 'Google Photos');
         } catch (err) {
           setUploadError(err.message || 'Google Photos ingestion failed.');
           toast.error(err.message || 'Google Photos ingestion failed.');
-        } finally {
           setIsUploading(false);
+          setActivePickerSession(null);
         }
       },
     });
 
     tokenClient.requestAccessToken({ prompt: '' });
   };
+
+  const executePickerIngest = async (sessionId, photographerId, sessionTag, cameraInfo) => {
+    setIsUploading(true);
+    toast.info('Downloading and indexing photos from Google Photos...');
+    try {
+      const resp = await api.ingestFromPicker(event.id, {
+        sessionId,
+        photographerId,
+        sessionTag,
+        cameraInfo,
+      });
+
+      const jobs = resp?.jobs || [];
+      setIngestionJobs((prev) => [...jobs, ...prev]);
+
+      if (sessionTag && !(event.sessions || []).includes(sessionTag)) {
+        try {
+          await api.updateEvent(event.id, { sessions: [...(event.sessions || []), sessionTag] });
+        } catch { /* non-fatal */ }
+      }
+
+      const ok = jobs.filter((j) => j.stage !== 'error').length;
+      const failed = jobs.filter((j) => j.stage === 'error').length;
+
+      if (ok) toast.success(`Indexed ${ok} photo${ok === 1 ? '' : 's'} from Google Photos${failed ? ` · ${failed} failed` : ''}.`);
+      else if (failed) toast.error(`Failed to ingest ${failed} photo${failed === 1 ? '' : 's'}.`);
+      else toast.info('No photos selected.');
+
+      onUploadPhotos();
+      loadStorage();
+    } catch (err) {
+      setUploadError(err.message || 'Google Photos ingestion failed.');
+      toast.error(err.message || 'Google Photos ingestion failed.');
+    } finally {
+      setIsUploading(false);
+      setActivePickerSession(null);
+    }
+  };
+
 
 
   // ---- CRUD action helpers (each confirms first, then toasts) ----
@@ -816,25 +831,62 @@ export const AdminPanel = ({
             </div>
 
             {/* Cloud Import Option: Google Photos Picker */}
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-4 rounded-xl bg-gradient-to-r from-indigo-50/50 via-white to-purple-50/50 border border-indigo-100/80">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-lg bg-indigo-600/10 flex items-center justify-center text-indigo-600 shrink-0">
-                  <Images className="w-4 h-4" />
+            <div className="p-4 rounded-xl bg-gradient-to-r from-indigo-50/50 via-white to-purple-50/50 border border-indigo-100/80 space-y-3">
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-indigo-600/10 flex items-center justify-center text-indigo-600 shrink-0">
+                    <Images className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <div className="text-xs font-bold text-slate-900">Google Photos Cloud Library</div>
+                    <div className="text-[11px] text-slate-500">Pick albums or select individual shots directly from Google Photos</div>
+                  </div>
                 </div>
-                <div>
-                  <div className="text-xs font-bold text-slate-900">Google Photos Cloud Library</div>
-                  <div className="text-[11px] text-slate-500">Pick albums or select individual shots directly from Google Photos</div>
-                </div>
+                <button
+                  type="button"
+                  disabled={isUploading && !activePickerSession}
+                  onClick={handleGooglePhotosPicker}
+                  className="w-full sm:w-auto px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-sm transition-all cursor-pointer disabled:opacity-60 shrink-0"
+                >
+                  <Images className="w-3.5 h-3.5" />
+                  <span>{activePickerSession ? 'Reopen Picker' : 'Pick from Google Photos'}</span>
+                </button>
               </div>
-              <button
-                type="button"
-                disabled={isUploading}
-                onClick={handleGooglePhotosPicker}
-                className="w-full sm:w-auto px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-sm transition-all cursor-pointer disabled:opacity-60 shrink-0"
-              >
-                <Images className="w-3.5 h-3.5" />
-                <span>Pick from Google Photos</span>
-              </button>
+
+              {/* Active Picker Guidance Banner (if popup was blocked or user is currently picking) */}
+              {activePickerSession && (
+                <div className="mt-2 p-3 bg-indigo-50/80 border border-indigo-200 rounded-xl flex flex-col sm:flex-row items-center justify-between gap-2.5 text-xs text-indigo-900 animate-in fade-in duration-200">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-indigo-600 animate-ping shrink-0" />
+                    <span>Select photos in Google Photos, then click Done.</span>
+                  </div>
+                  <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+                    <a
+                      href={activePickerSession.pickerUri}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-3 py-1.5 bg-white border border-indigo-300 text-indigo-700 hover:bg-indigo-100/50 rounded-lg font-bold flex items-center gap-1 shadow-xs transition-colors"
+                    >
+                      <span>Open Window</span>
+                      <ArrowUpRight className="w-3 h-3" />
+                    </a>
+                    <button
+                      type="button"
+                      onClick={() => executePickerIngest(activePickerSession.sessionId, activePickerSession.photographerId, activePickerSession.sessionTag, activePickerSession.cameraInfo)}
+                      className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold shadow-xs transition-colors cursor-pointer"
+                    >
+                      Done Selecting
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setActivePickerSession(null); setIsUploading(false); }}
+                      className="px-2.5 py-1.5 text-slate-500 hover:text-slate-700 font-medium cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
 
             {uploadError && (
