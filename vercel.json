@@ -7,6 +7,11 @@
     {
       "source": "/media/:path*",
       "destination": "https://rubicon.up.railway.app/media/:path*"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
     }
   ]
 }
+

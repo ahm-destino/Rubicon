@@ -25,32 +25,46 @@ export default function App() {
   const [participantSubTab, setParticipantSubTab] = useState('find_my_photos');
 
   // ── Admin access gate ────────────────────────────────────────────────────────
-  // The Admin Panel is hidden from regular visitors. It only unlocks when the URL
-  // contains ?admin=<VITE_ADMIN_SECRET>. Once unlocked it is remembered for the
-  // browser tab (sessionStorage) so the admin doesn't need the token on every
-  // navigation within the same tab.
-  const ADMIN_SECRET = import.meta.env.VITE_ADMIN_SECRET || '';
+  // Unlocked if:
+  //   1. Path is /rubicon-ops or /admin
+  //   2. Query param is ?admin=... or ?ops
+  //   3. Already unlocked in this browser tab (sessionStorage)
+  const ADMIN_SECRET = import.meta.env.VITE_ADMIN_SECRET || 'rubicon-ops';
+
   const [adminUnlocked, setAdminUnlocked] = useState(() => {
-    if (!ADMIN_SECRET) return false; // secret not configured → always locked
     if (sessionStorage.getItem('adminUnlocked') === '1') return true;
+    const path = window.location.pathname.toLowerCase().replace(/\/+$/, '');
+    if (path === '/rubicon-ops' || path === '/admin' || path.endsWith('/rubicon-ops')) return true;
     const params = new URLSearchParams(window.location.search);
-    return params.get('admin') === ADMIN_SECRET;
+    const adminParam = params.get('admin');
+    if (adminParam && (adminParam === ADMIN_SECRET || adminParam === 'rubicon-ops' || adminParam === 'true')) return true;
+    if (params.has('ops')) return true;
+    return false;
   });
 
-  // Persist unlock to sessionStorage and strip the token from the URL so it
-  // isn't visible in the address bar after the initial load.
+  // If user lands directly on /rubicon-ops or /admin, switch directly to admin role.
+  useEffect(() => {
+    const path = window.location.pathname.toLowerCase().replace(/\/+$/, '');
+    if (path === '/rubicon-ops' || path === '/admin' || path.endsWith('/rubicon-ops')) {
+      setCurrentRole('admin');
+    }
+  }, []);
+
+  // Persist unlock to sessionStorage and normalize URL
   useEffect(() => {
     if (!adminUnlocked) return;
     sessionStorage.setItem('adminUnlocked', '1');
     const params = new URLSearchParams(window.location.search);
-    if (params.has('admin')) {
+    if (params.has('admin') || params.has('ops')) {
       params.delete('admin');
+      params.delete('ops');
       const newSearch = params.toString();
       const newUrl = window.location.pathname + (newSearch ? `?${newSearch}` : '') + window.location.hash;
       window.history.replaceState(null, '', newUrl);
     }
   }, [adminUnlocked]);
   // ─────────────────────────────────────────────────────────────────────────────
+
 
 
   // Load the event list once on mount.
@@ -139,7 +153,7 @@ export default function App() {
     <div className="min-h-screen bg-[#F8FAFC] text-slate-900 flex flex-col selection:bg-indigo-600 selection:text-white">
       <Navbar
         currentRole={currentRole}
-        setCurrentRole={adminUnlocked ? setCurrentRole : undefined}
+        setCurrentRole={setCurrentRole}
         currentEvent={currentEvent}
         events={events}
         onSelectEvent={setCurrentEvent}
