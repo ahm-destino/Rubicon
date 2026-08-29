@@ -147,14 +147,15 @@ export const AdminPanel = ({
     if (admin && activeTab === 'settings') loadUsers();
   }, [admin, activeTab, loadUsers]);
 
-  // Generate the guest QR client-side (no external service).
+  // Generate the guest QR client-side (no external service) in high-res for crisp large-screen display.
   useEffect(() => {
     if (!showQrModal) return;
-    QRCode.toDataURL(shareUrl, { width: 240, margin: 1, color: { dark: '#0f172a', light: '#ffffff' } })
+    QRCode.toDataURL(shareUrl, { width: 512, margin: 1, color: { dark: '#0f172a', light: '#ffffff' } })
       .then(setQrDataUrl)
       .catch(() => setQrDataUrl(''));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showQrModal]);
+
 
   const handleAdminLogin = async (e) => {
     e.preventDefault();
@@ -1493,43 +1494,92 @@ export const AdminPanel = ({
       {/* Guest Access QR Code Modal (client-side generated) */}
       {showQrModal && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/80 backdrop-blur-sm p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4 sm:p-6 overflow-y-auto"
           onMouseDown={(e) => { if (e.target === e.currentTarget) setShowQrModal(false); }}
         >
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 sm:p-8 space-y-6 shadow-2xl border border-slate-200">
-            <div className="text-center space-y-2">
-              <div className="w-12 h-12 rounded-2xl bg-indigo-50 border border-indigo-100 text-indigo-600 flex items-center justify-center mx-auto">
+          <div className="bg-white rounded-3xl max-w-lg lg:max-w-xl w-full p-6 sm:p-9 space-y-6 shadow-2xl border border-slate-200 animate-in fade-in zoom-in duration-200">
+            {/* Modal Header */}
+            <div className="flex items-start justify-between gap-4">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                  <span className="text-[11px] font-extrabold uppercase tracking-widest text-indigo-600">
+                    Live Event Portal Standee
+                  </span>
+                </div>
+                <h3 className="text-xl sm:text-2xl font-black text-slate-900 font-display">
+                  {event.name}
+                </h3>
+                <p className="text-xs text-slate-500">
+                  Display on venue screens, table placards, or badges for instant AI selfie search.
+                </p>
+              </div>
+              <div className="w-11 h-11 rounded-2xl bg-indigo-50 border border-indigo-100 text-indigo-600 flex items-center justify-center shrink-0">
                 <QrCode className="w-6 h-6" />
               </div>
-              <h3 className="text-xl font-bold text-slate-900">Event guest portal</h3>
-              <p className="text-xs text-slate-500">
-                Display this QR code at event screens, badges, or banquet tables for instant attendee selfie search.
-              </p>
             </div>
 
-            <div className="bg-slate-900 p-6 rounded-2xl text-center space-y-3">
-              <div className="w-44 h-44 mx-auto bg-white p-3 rounded-xl flex items-center justify-center">
+            {/* High-Impact QR Display Placard */}
+            <div className="bg-gradient-to-b from-slate-900 to-slate-950 p-6 sm:p-8 rounded-3xl text-center space-y-5 shadow-xl border border-slate-800">
+              <div className="flex items-center justify-center gap-2 text-xs font-semibold text-indigo-300">
+                <div className="w-2 h-2 rounded-full bg-indigo-400" />
+                <span>Scan with any phone camera to find your photos</span>
+              </div>
+
+              {/* Responsive Sharp QR Container */}
+              <div className="w-52 h-52 sm:w-64 sm:h-64 md:w-72 md:h-72 mx-auto bg-white p-3 sm:p-4 rounded-2xl shadow-2xl flex items-center justify-center">
                 {qrDataUrl ? (
-                  <img src={qrDataUrl} alt="Guest portal QR code" className="w-full h-full object-contain" />
+                  <img
+                    src={qrDataUrl}
+                    alt={`${event.name} guest portal QR`}
+                    className="w-full h-full object-contain select-none"
+                  />
                 ) : (
-                  <RefreshCw className="w-6 h-6 text-slate-300 animate-spin" />
+                  <RefreshCw className="w-8 h-8 text-slate-400 animate-spin" />
                 )}
               </div>
-              <div className="text-[11px] text-slate-400 font-mono truncate">{shareUrl}</div>
+
+              <div className="space-y-2">
+                <div className="text-xs text-slate-400 font-mono bg-slate-800/80 px-3 py-1.5 rounded-xl border border-slate-700/60 truncate max-w-sm mx-auto select-all">
+                  {shareUrl}
+                </div>
+
+                {/* Creator Signature in QR frame */}
+                <div className="pt-2 flex items-center justify-center gap-1.5 text-[11px] text-slate-400">
+                  <span>Engineered by</span>
+                  <span className="font-bold text-white">Destiny Kingsley</span>
+                  <span className="text-indigo-400 font-bold">·</span>
+                  <span className="font-bold text-indigo-400">The Ruby Group</span>
+                </div>
+              </div>
             </div>
 
-            <div className="flex gap-2">
+            {/* Actions */}
+            <div className="flex flex-col sm:flex-row gap-2.5">
               <button
+                type="button"
                 onClick={copyShareLink}
-                className="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold flex items-center justify-center space-x-2 transition-colors cursor-pointer"
+                className="flex-1 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold flex items-center justify-center space-x-2 shadow-sm transition-all cursor-pointer"
               >
                 {copiedLink ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                <span>{copiedLink ? 'Link copied!' : 'Copy portal link'}</span>
+                <span>{copiedLink ? 'Portal link copied!' : 'Copy guest portal link'}</span>
               </button>
 
+              {qrDataUrl && (
+                <a
+                  href={qrDataUrl}
+                  download={`${event.slug || 'event'}-guest-qr.png`}
+                  className="px-4 py-3 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                >
+                  <Download className="w-4 h-4 text-slate-600" />
+                  <span>Save QR image</span>
+                </a>
+              )}
+
               <button
+                type="button"
                 onClick={() => setShowQrModal(false)}
-                className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+                className="px-4 py-3 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-xs font-bold transition-colors cursor-pointer"
               >
                 Close
               </button>
