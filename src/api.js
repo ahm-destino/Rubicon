@@ -116,6 +116,15 @@ export const api = {
   disconnectStorage: (eventId) =>
     request(`/api/events/${eventId}/storage/disconnect`, { method: 'POST' }),
   health: () => request('/api/health'),
+
+  // --- google photos picker ---
+  createPickerSession: (accessToken) =>
+    request('/api/auth/google/picker/session', { method: 'POST', body: { access_token: accessToken } }),
+  pollPickerSession: (sessionId) =>
+    request(`/api/auth/google/picker/session/${sessionId}`),
+  ingestFromPicker: (eventId, body) =>
+    request(`/api/events/${eventId}/photos/from-picker`, { method: 'POST', body }),
 };
+
 
 export default api;

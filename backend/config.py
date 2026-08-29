@@ -38,11 +38,34 @@ class Config:
     ]
 
     # Database
-    SQLALCHEMY_DATABASE_URI = os.getenv(
+    # Supabase's connection pooler (pgBouncer, transaction mode) requires:
+    #   • postgresql+psycopg2:// driver (not plain postgresql://)
+    #   • ?pgbouncer=true  →  disables server-side prepared statements
+    #   • NullPool          →  no persistent connections; each request borrows
+    #                          one from pgBouncer and returns it immediately.
+    #     Without NullPool, SQLAlchemy holds connections open across requests,
+    #     which breaks pgBouncer's transaction mode and causes 401s on load-
+    #     balanced workers (the DB session returns a different backend connection
+    #     and the User lookup silently fails).
+    _raw_db_url = os.getenv(
         "DATABASE_URL", "postgresql+psycopg2://rubicon:rubicon@localhost:5432/rubicon"
     )
+    # Normalise Supabase's plain postgresql:// → postgresql+psycopg2://
+    SQLALCHEMY_DATABASE_URI = _raw_db_url.replace(
+        "postgresql://", "postgresql+psycopg2://", 1
+    )
+    # Append pgbouncer=true if connecting through pgBouncer (pooler.supabase.com).
+    if "pooler.supabase.com" in SQLALCHEMY_DATABASE_URI and "pgbouncer=true" not in SQLALCHEMY_DATABASE_URI:
+        _sep = "&" if "?" in SQLALCHEMY_DATABASE_URI else "?"
+        SQLALCHEMY_DATABASE_URI += f"{_sep}pgbouncer=true"
+
     SQLALCHEMY_TRACK_MODIFICATIONS = False
-    SQLALCHEMY_ENGINE_OPTIONS = {"pool_pre_ping": True}
+    SQLALCHEMY_ENGINE_OPTIONS = {
+        "pool_pre_ping": True,
+        # NullPool: no persistent pool — required for pgBouncer transaction mode.
+        "poolclass": __import__("sqlalchemy.pool", fromlist=["NullPool"]).NullPool,
+        "connect_args": {"options": "-c statement_timeout=30000"},
+    }
 
     # Uploads
     MAX_CONTENT_LENGTH = int(os.getenv("MAX_UPLOAD_MB", "200")) * 1024 * 1024

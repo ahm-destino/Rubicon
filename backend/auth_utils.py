@@ -36,7 +36,14 @@ def set_auth_cookie(resp, user: User):
 
 
 def clear_auth_cookie(resp):
-    resp.delete_cookie(Config.COOKIE_NAME, path="/")
+    # samesite and secure must match the original Set-Cookie attributes;
+    # without them the browser ignores the deletion for SameSite=None cookies.
+    resp.delete_cookie(
+        Config.COOKIE_NAME,
+        path="/",
+        secure=Config.COOKIE_SECURE,
+        samesite=Config.COOKIE_SAMESITE,
+    )
     return resp
 
 

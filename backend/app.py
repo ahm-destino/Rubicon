@@ -55,10 +55,11 @@ def create_app():
 
     # Blueprints
     from blueprints import (auth, downloads, events, participants,
-                            photographers, photos, search, stats, storage, users)
+                            photographers, photos, picker, search, stats, storage, users)
     for module in (auth, users, events, photographers, participants, photos,
-                   search, downloads, stats, storage):
+                   picker, search, downloads, stats, storage):
         app.register_blueprint(module.bp)
+
 
     @app.get("/api/health")
     def health():

@@ -24,6 +24,35 @@ export default function App() {
   const [isArchitectureModalOpen, setIsArchitectureModalOpen] = useState(false);
   const [participantSubTab, setParticipantSubTab] = useState('find_my_photos');
 
+  // ── Admin access gate ────────────────────────────────────────────────────────
+  // The Admin Panel is hidden from regular visitors. It only unlocks when the URL
+  // contains ?admin=<VITE_ADMIN_SECRET>. Once unlocked it is remembered for the
+  // browser tab (sessionStorage) so the admin doesn't need the token on every
+  // navigation within the same tab.
+  const ADMIN_SECRET = import.meta.env.VITE_ADMIN_SECRET || '';
+  const [adminUnlocked, setAdminUnlocked] = useState(() => {
+    if (!ADMIN_SECRET) return false; // secret not configured → always locked
+    if (sessionStorage.getItem('adminUnlocked') === '1') return true;
+    const params = new URLSearchParams(window.location.search);
+    return params.get('admin') === ADMIN_SECRET;
+  });
+
+  // Persist unlock to sessionStorage and strip the token from the URL so it
+  // isn't visible in the address bar after the initial load.
+  useEffect(() => {
+    if (!adminUnlocked) return;
+    sessionStorage.setItem('adminUnlocked', '1');
+    const params = new URLSearchParams(window.location.search);
+    if (params.has('admin')) {
+      params.delete('admin');
+      const newSearch = params.toString();
+      const newUrl = window.location.pathname + (newSearch ? `?${newSearch}` : '') + window.location.hash;
+      window.history.replaceState(null, '', newUrl);
+    }
+  }, [adminUnlocked]);
+  // ─────────────────────────────────────────────────────────────────────────────
+
+
   // Load the event list once on mount.
   const loadEvents = useCallback(
     (selectId) =>
@@ -110,7 +139,7 @@ export default function App() {
     <div className="min-h-screen bg-[#F8FAFC] text-slate-900 flex flex-col selection:bg-indigo-600 selection:text-white">
       <Navbar
         currentRole={currentRole}
-        setCurrentRole={setCurrentRole}
+        setCurrentRole={adminUnlocked ? setCurrentRole : undefined}
         currentEvent={currentEvent}
         events={events}
         onSelectEvent={setCurrentEvent}
@@ -118,6 +147,7 @@ export default function App() {
         onOpenArchitecture={() => setIsArchitectureModalOpen(true)}
         participantSubTab={participantSubTab}
         setParticipantSubTab={setParticipantSubTab}
+        adminUnlocked={adminUnlocked}
       />
 
       <main className="flex-1">
@@ -144,7 +174,7 @@ export default function App() {
           </div>
         )}
 
-        {currentRole !== 'participant' && (
+        {adminUnlocked && currentRole !== 'participant' && (
           <AdminPanel
             event={currentEvent}
             events={events}

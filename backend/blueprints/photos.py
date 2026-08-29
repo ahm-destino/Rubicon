@@ -1,4 +1,5 @@
 """Photos: gallery listing, detail, view counter, real upload+ingest, job polling."""
+import requests as http
 from flask import Blueprint, jsonify, request
 
 from auth_utils import admin_required
@@ -109,6 +110,97 @@ def upload_photos(event_id):
             job.stage = "error"
             job.error = str(exc)
             db.session.commit()
+        jobs.append(job.to_dict())
+
+    return jsonify({"jobs": jobs}), 201
+
+
+@bp.post("/events/<event_id>/photos/from-picker")
+@admin_required
+def upload_from_picker(event_id):
+    """Ingest photos selected via Google Photos Picker session.
+    Body: { sessionId: str, photographerId: str, sessionTag: str, cameraInfo: str }
+    """
+    if not db.session.get(Event, event_id):
+        return jsonify({"error": "event not found"}), 404
+
+    data = request.get_json(silent=True) or {}
+    session_id = (data.get("sessionId") or "").strip()
+    photographer_id = data.get("photographerId")
+    session_tag = data.get("sessionTag", "General")
+    camera_info = data.get("cameraInfo", "Google Photos")
+
+    if not session_id:
+        return jsonify({"error": "sessionId is required"}), 400
+
+    from blueprints.picker import PICKER_BASE, get_session_token
+    token = get_session_token(session_id)
+    if not token:
+        return jsonify({"error": "Picker session expired or not found"}), 404
+
+    # 1. Fetch picked items list from Google Photos Picker API
+    try:
+        resp = http.get(
+            f"{PICKER_BASE}/mediaItems",
+            params={"sessionId": session_id, "pageSize": 100},
+            headers={"Authorization": f"Bearer {token}"},
+            timeout=20,
+        )
+        resp.raise_for_status()
+    except Exception as exc:
+        return jsonify({"error": f"Failed to list picked media items: {exc}"}), 502
+
+    items_data = resp.json().get("mediaItems", [])
+    if not items_data:
+        return jsonify({"jobs": [], "message": "No media items selected"}), 200
+
+    jobs = []
+    for item in items_data:
+        media_file = item.get("mediaFile") or item
+        base_url = media_file.get("baseUrl")
+        filename = media_file.get("filename") or f"gphoto_{item.get('id', new_id('gp'))}.jpg"
+
+        if not base_url:
+            continue
+
+        job = IngestionJob(
+            id=new_id("job"),
+            filename=filename,
+            photographer_id=photographer_id,
+            event_id=event_id,
+            session_tag=session_tag,
+            stage="downloading_google_photos",
+            progress=10,
+        )
+        db.session.add(job)
+        db.session.commit()
+
+        try:
+            # Download full-res bytes from baseUrl (with =d parameter for full download)
+            download_url = f"{base_url}=d"
+            dl_resp = http.get(
+                download_url,
+                headers={"Authorization": f"Bearer {token}"},
+                timeout=30,
+            )
+            dl_resp.raise_for_status()
+            raw_bytes = dl_resp.content
+
+            # Ingest into storage + face recognition
+            ingest_photo(
+                event_id=event_id,
+                photographer_id=photographer_id,
+                session_tag=session_tag,
+                filename=filename,
+                raw=raw_bytes,
+                camera_info=camera_info,
+                job=job,
+            )
+        except Exception as exc:
+            job.stage = "error"
+            job.error = str(exc)
+            db.session.commit()
+
         jobs.append(job.to_dict())
 
     return jsonify({"jobs": jobs}), 201
