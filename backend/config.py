@@ -34,30 +34,29 @@ class Config:
     # Login rate limit (Flask-Limiter syntax).
     LOGIN_RATE_LIMIT = os.getenv("LOGIN_RATE_LIMIT", "10 per minute;50 per hour")
     CORS_ORIGINS = [
-        o.strip() for o in os.getenv("CORS_ORIGINS").split(",") if o.strip()
+        o.strip() for o in os.getenv("CORS_ORIGINS", "http://localhost:3000,http://localhost:5173,https://rubiconn.vercel.app").split(",") if o.strip()
     ]
 
+
     # Database
-    # Supabase's connection pooler (pgBouncer, transaction mode) requires:
-    #   • postgresql+psycopg2:// driver (not plain postgresql://)
-    #   • ?pgbouncer=true  →  disables server-side prepared statements
-    #   • NullPool          →  no persistent connections; each request borrows
-    #                          one from pgBouncer and returns it immediately.
-    #     Without NullPool, SQLAlchemy holds connections open across requests,
-    #     which breaks pgBouncer's transaction mode and causes 401s on load-
-    #     balanced workers (the DB session returns a different backend connection
-    #     and the User lookup silently fails).
+    # Supabase connection handling:
+    #   • Ensure postgresql+psycopg2:// driver prefix
+    #   • Strip ?pgbouncer=true if present (psycopg2/libpq rejects pgbouncer as an unknown option)
+    #   • Use NullPool so connections aren't kept open across requests in transaction poolers
     _raw_db_url = os.getenv(
         "DATABASE_URL", "postgresql+psycopg2://rubicon:rubicon@localhost:5432/rubicon"
     )
     # Normalise Supabase's plain postgresql:// → postgresql+psycopg2://
-    SQLALCHEMY_DATABASE_URI = _raw_db_url.replace(
+    _db_url = _raw_db_url.replace(
         "postgresql://", "postgresql+psycopg2://", 1
     )
-    # Append pgbouncer=true if connecting through pgBouncer (pooler.supabase.com).
-    if "pooler.supabase.com" in SQLALCHEMY_DATABASE_URI and "pgbouncer=true" not in SQLALCHEMY_DATABASE_URI:
-        _sep = "&" if "?" in SQLALCHEMY_DATABASE_URI else "?"
-        SQLALCHEMY_DATABASE_URI += f"{_sep}pgbouncer=true"
+    # Strip ?pgbouncer=true / &pgbouncer=true (Prisma syntax that breaks psycopg2)
+    _db_url = _db_url.replace("&pgbouncer=true", "").replace("?pgbouncer=true", "").replace("pgbouncer=true", "")
+    if _db_url.endswith("?") or _db_url.endswith("&"):
+        _db_url = _db_url[:-1]
+
+    SQLALCHEMY_DATABASE_URI = _db_url
+
 
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     SQLALCHEMY_ENGINE_OPTIONS = {
