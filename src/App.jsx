@@ -9,7 +9,22 @@ import { PhotoLightbox } from './components/PhotoLightbox';
 import { ArchitectureModal } from './components/ArchitectureModal';
 
 export default function App() {
-  const [currentRole, setCurrentRole] = useState('participant');
+  const [currentRole, setCurrentRole] = useState(() => {
+    const path = window.location.pathname.toLowerCase().replace(/\/+$/, '');
+    const params = new URLSearchParams(window.location.search);
+    if (
+      path === '/rubicon-ops' ||
+      path === '/admin' ||
+      path.endsWith('/rubicon-ops') ||
+      path.endsWith('/admin') ||
+      params.has('admin') ||
+      params.has('ops')
+    ) {
+      return 'admin';
+    }
+    return 'participant';
+  });
+
   const [events, setEvents] = useState([]);
   const [currentEvent, setCurrentEvent] = useState(null);
   const [photographers, setPhotographers] = useState([]);
@@ -22,6 +37,21 @@ export default function App() {
   const [highlightedParticipantId, setHighlightedParticipantId] = useState(undefined);
   const [isArchitectureModalOpen, setIsArchitectureModalOpen] = useState(false);
   const [participantSubTab, setParticipantSubTab] = useState('find_my_photos');
+
+  useEffect(() => {
+    const path = window.location.pathname.toLowerCase().replace(/\/+$/, '');
+    const params = new URLSearchParams(window.location.search);
+    if (
+      path === '/rubicon-ops' ||
+      path === '/admin' ||
+      path.endsWith('/rubicon-ops') ||
+      path.endsWith('/admin') ||
+      params.has('admin') ||
+      params.has('ops')
+    ) {
+      setCurrentRole('admin');
+    }
+  }, []);
 
   // Load the event list once on mount.
   const loadEvents = useCallback(
