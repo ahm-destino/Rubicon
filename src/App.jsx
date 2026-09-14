@@ -18,54 +18,10 @@ export default function App() {
   const [storageConfig, setStorageConfig] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-
   const [lightboxPhoto, setLightboxPhoto] = useState(null);
   const [highlightedParticipantId, setHighlightedParticipantId] = useState(undefined);
   const [isArchitectureModalOpen, setIsArchitectureModalOpen] = useState(false);
   const [participantSubTab, setParticipantSubTab] = useState('find_my_photos');
-
-  // ── Admin access gate ────────────────────────────────────────────────────────
-  // Unlocked if:
-  //   1. Path is /rubicon-ops or /admin
-  //   2. Query param is ?admin=... or ?ops
-  //   3. Already unlocked in this browser tab (sessionStorage)
-  const ADMIN_SECRET = import.meta.env.VITE_ADMIN_SECRET || 'rubicon-ops';
-
-  const [adminUnlocked, setAdminUnlocked] = useState(() => {
-    if (sessionStorage.getItem('adminUnlocked') === '1') return true;
-    const path = window.location.pathname.toLowerCase().replace(/\/+$/, '');
-    if (path === '/rubicon-ops' || path === '/admin' || path.endsWith('/rubicon-ops')) return true;
-    const params = new URLSearchParams(window.location.search);
-    const adminParam = params.get('admin');
-    if (adminParam && (adminParam === ADMIN_SECRET || adminParam === 'rubicon-ops' || adminParam === 'true')) return true;
-    if (params.has('ops')) return true;
-    return false;
-  });
-
-  // If user lands directly on /rubicon-ops or /admin, switch directly to admin role.
-  useEffect(() => {
-    const path = window.location.pathname.toLowerCase().replace(/\/+$/, '');
-    if (path === '/rubicon-ops' || path === '/admin' || path.endsWith('/rubicon-ops')) {
-      setCurrentRole('admin');
-    }
-  }, []);
-
-  // Persist unlock to sessionStorage and normalize URL
-  useEffect(() => {
-    if (!adminUnlocked) return;
-    sessionStorage.setItem('adminUnlocked', '1');
-    const params = new URLSearchParams(window.location.search);
-    if (params.has('admin') || params.has('ops')) {
-      params.delete('admin');
-      params.delete('ops');
-      const newSearch = params.toString();
-      const newUrl = window.location.pathname + (newSearch ? `?${newSearch}` : '') + window.location.hash;
-      window.history.replaceState(null, '', newUrl);
-    }
-  }, [adminUnlocked]);
-  // ─────────────────────────────────────────────────────────────────────────────
-
-
 
   // Load the event list once on mount.
   const loadEvents = useCallback(
@@ -161,7 +117,6 @@ export default function App() {
         onOpenArchitecture={() => setIsArchitectureModalOpen(true)}
         participantSubTab={participantSubTab}
         setParticipantSubTab={setParticipantSubTab}
-        adminUnlocked={adminUnlocked}
       />
 
       <main className="flex-1">
@@ -188,7 +143,7 @@ export default function App() {
           </div>
         )}
 
-        {adminUnlocked && currentRole !== 'participant' && (
+        {currentRole !== 'participant' && (
           <AdminPanel
             event={currentEvent}
             events={events}
@@ -239,23 +194,20 @@ export default function App() {
             </div>
           </div>
 
-          {/* Signature */}
-          <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-xs">
-            <div className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-slate-50 hover:bg-slate-100/80 border border-slate-200/90 shadow-xs transition-colors">
-              <span className="text-slate-500 font-medium">Built by</span>
-              <a
-                href="https://kingsleydestiny.vercel.app"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="group inline-flex items-center gap-1 font-bold text-slate-900 hover:text-indigo-600 transition-colors"
-              >
-                <span>Destiny Kingsley</span>
-                <ArrowUpRight className="w-3 h-3 text-slate-400 group-hover:text-indigo-600 transition-colors" />
-              </a>
-              <span className="text-slate-400">from</span>
-              <span className="text-slate-900 font-bold tracking-tight">the Ruby Group</span>
-            </div>
-            <span className="text-[11px] font-medium text-slate-400">· 2026</span>
+          {/* Credit */}
+          <div className="flex items-center gap-1.5 text-xs text-slate-500">
+            <span>Built by</span>
+            <a
+              href="https://kingsleydestiny.vercel.app"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="group inline-flex items-center gap-0.5 font-semibold text-slate-700 hover:text-indigo-600 transition-colors"
+            >
+              Destiny Kingsley
+              <ArrowUpRight className="w-3 h-3 text-slate-400 group-hover:text-indigo-600 transition-colors" />
+            </a>
+            <span className="text-slate-300">·</span>
+            <span>2026</span>
           </div>
         </div>
       </footer>

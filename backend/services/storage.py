@@ -225,10 +225,13 @@ def delete_image(photo) -> None:
     if photo.storage_account_id and photo.storage_meta:
         account = StorageAccount.query.get(photo.storage_account_id)
         if account and account.provider == "gdrive" and account.refresh_token:
-            token = gdrive.access_token_for(account.refresh_token)
-            for file_id in photo.storage_meta.values():
-                if file_id:
-                    gdrive.delete_file(token, file_id)
+            try:
+                token = gdrive.access_token_for(account.refresh_token)
+                for file_id in photo.storage_meta.values():
+                    if file_id:
+                        gdrive.delete_file(token, file_id)
+            except Exception:
+                pass
         return
 
     key = photo.google_media_id
