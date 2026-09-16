@@ -305,6 +305,67 @@ export const AdminPanel = ({
     }
   };
 
+  const [isDragging, setIsDragging] = useState(false);
+
+  const handleDragOver = useCallback((e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!isUploading) setIsDragging(true);
+  }, [isUploading]);
+
+  const handleDragLeave = useCallback((e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+  }, []);
+
+  const handleDrop = useCallback((e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+    if (isUploading) return;
+    const droppedFiles = e.dataTransfer?.files;
+    if (droppedFiles && droppedFiles.length > 0) {
+      handleBatchUpload(droppedFiles);
+    }
+  }, [isUploading, handleBatchUpload]);
+
+  useEffect(() => {
+    const handleGlobalPaste = (e) => {
+      const activeEl = document.activeElement;
+      if (activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA' || activeEl.isContentEditable)) {
+        return;
+      }
+      if (activeTab !== 'overview' || isUploading) return;
+
+      const pastedFiles = [];
+      if (e.clipboardData?.files?.length > 0) {
+        for (let i = 0; i < e.clipboardData.files.length; i++) {
+          if (e.clipboardData.files[i].type.startsWith('image/')) {
+            pastedFiles.push(e.clipboardData.files[i]);
+          }
+        }
+      }
+      if (pastedFiles.length === 0 && e.clipboardData?.items?.length > 0) {
+        for (let i = 0; i < e.clipboardData.items.length; i++) {
+          const item = e.clipboardData.items[i];
+          if (item.kind === 'file' && item.type.startsWith('image/')) {
+            const file = item.getAsFile();
+            if (file) pastedFiles.push(file);
+          }
+        }
+      }
+
+      if (pastedFiles.length > 0) {
+        toast.info(`Pasting ${pastedFiles.length} image(s) from clipboard...`);
+        handleBatchUpload(pastedFiles);
+      }
+    };
+
+    window.addEventListener('paste', handleGlobalPaste);
+    return () => window.removeEventListener('paste', handleGlobalPaste);
+  }, [activeTab, isUploading, handleBatchUpload]);
+
   const handleGooglePhotosPicker = async () => {
     if (!activePhotographer) {
       setUploadError('Add a photographer to this event before uploading.');
@@ -782,13 +843,23 @@ export const AdminPanel = ({
             {/* Drop zone */}
             <div
               onClick={() => !isUploading && uploadInputRef.current?.click()}
+              onDragOver={handleDragOver}
+              onDragEnter={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
               className={`border-2 border-dashed rounded-2xl p-8 sm:p-10 text-center transition-all flex flex-col items-center justify-center space-y-3 ${
-                isUploading
+                isDragging
+                  ? 'border-indigo-600 bg-indigo-50/80 scale-[1.01] shadow-lg ring-4 ring-indigo-500/10'
+                  : isUploading
                   ? 'border-indigo-300 bg-indigo-50/40 cursor-wait'
                   : 'border-slate-200 hover:border-indigo-500 bg-slate-50/50 hover:bg-indigo-50/30 cursor-pointer'
               }`}
             >
-              <div className="w-12 h-12 rounded-full bg-white border border-slate-200 shadow-sm flex items-center justify-center text-indigo-600">
+              <div className={`w-12 h-12 rounded-full border shadow-sm flex items-center justify-center transition-all ${
+                isDragging
+                  ? 'bg-indigo-600 text-white border-indigo-600 scale-110'
+                  : 'bg-white border-slate-200 text-indigo-600'
+              }`}>
                 {isUploading ? <RefreshCw className="w-5 h-5 animate-spin" /> : <Upload className="w-5 h-5" />}
               </div>
               {isUploading ? (
@@ -812,7 +883,7 @@ export const AdminPanel = ({
               ) : (
                 <div className="space-y-1">
                   <div className="text-sm font-bold text-slate-900">
-                    Drop JPEG/PNG files here, or click to browse
+                    {isDragging ? 'Release to drop photos!' : 'Drop JPEG/PNG files here, paste (Ctrl+V), or click to browse'}
                   </div>
                   <div className="text-xs text-slate-400">
                     Storage + face detection + 512-d embedding, all server-side

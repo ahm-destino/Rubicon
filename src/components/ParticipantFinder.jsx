@@ -122,9 +122,10 @@ export const ParticipantFinder = ({ event, participants, photos, onOpenLightbox 
     setIsCameraActive(false);
   };
 
-  const handleFileUpload = (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const [isDragging, setIsDragging] = useState(false);
+
+  const processImageFile = useCallback((file) => {
+    if (!file || !file.type.startsWith('image/')) return;
     const reader = new FileReader();
     reader.onload = (evt) => {
       const dataUrl = evt.target?.result;
@@ -133,7 +134,65 @@ export const ParticipantFinder = ({ event, participants, photos, onOpenLightbox 
       runSelfieSearch(dataUrl, null);
     };
     reader.readAsDataURL(file);
+  }, [runSelfieSearch]);
+
+  const handleFileUpload = (e) => {
+    const file = e.target.files?.[0];
+    if (file) processImageFile(file);
   };
+
+  const handleDragOver = useCallback((e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  }, []);
+
+  const handleDragLeave = useCallback((e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+  }, []);
+
+  const handleDrop = useCallback((e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+    const droppedFile = e.dataTransfer?.files?.[0];
+    if (droppedFile) processImageFile(droppedFile);
+  }, [processImageFile]);
+
+  useEffect(() => {
+    const handleGlobalPaste = (e) => {
+      const activeEl = document.activeElement;
+      if (activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA' || activeEl.isContentEditable)) {
+        return;
+      }
+      let pastedFile = null;
+      if (e.clipboardData?.files?.length > 0) {
+        for (let i = 0; i < e.clipboardData.files.length; i++) {
+          if (e.clipboardData.files[i].type.startsWith('image/')) {
+            pastedFile = e.clipboardData.files[i];
+            break;
+          }
+        }
+      }
+      if (!pastedFile && e.clipboardData?.items?.length > 0) {
+        for (let i = 0; i < e.clipboardData.items.length; i++) {
+          const item = e.clipboardData.items[i];
+          if (item.kind === 'file' && item.type.startsWith('image/')) {
+            pastedFile = item.getAsFile();
+            if (pastedFile) break;
+          }
+        }
+      }
+      if (pastedFile) {
+        processImageFile(pastedFile);
+      }
+    };
+
+    window.addEventListener('paste', handleGlobalPaste);
+    return () => window.removeEventListener('paste', handleGlobalPaste);
+  }, [processImageFile]);
 
   // The backend search is a single atomic call (no streaming), so we can't report
   // true byte-level progress. Instead we ease a bar toward ~92% through labelled
@@ -366,15 +425,27 @@ export const ParticipantFinder = ({ event, participants, photos, onOpenLightbox 
                 {/* Upload or Selfie Dropzone */}
                 <div
                   onClick={() => fileInputRef.current?.click()}
-                  className="group relative border-2 border-dashed border-slate-200 hover:border-indigo-500 bg-slate-50/60 hover:bg-indigo-50/30 rounded-2xl p-8 text-center cursor-pointer transition-all flex flex-col items-center justify-center space-y-3"
+                  onDragOver={handleDragOver}
+                  onDragEnter={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  onDrop={handleDrop}
+                  className={`group relative border-2 border-dashed rounded-2xl p-8 text-center cursor-pointer transition-all flex flex-col items-center justify-center space-y-3 ${
+                    isDragging
+                      ? 'border-indigo-600 bg-indigo-50/80 scale-[1.01] shadow-lg ring-4 ring-indigo-500/10'
+                      : 'border-slate-200 hover:border-indigo-500 bg-slate-50/60 hover:bg-indigo-50/30'
+                  }`}
                 >
-                  <div className="w-12 h-12 rounded-full bg-white shadow-sm border border-slate-200 flex items-center justify-center text-indigo-600 group-hover:scale-105 transition-transform">
+                  <div className={`w-12 h-12 rounded-full shadow-sm border flex items-center justify-center transition-all ${
+                    isDragging
+                      ? 'bg-indigo-600 text-white border-indigo-600 scale-110'
+                      : 'bg-white border-slate-200 text-indigo-600 group-hover:scale-105'
+                  }`}>
                     <Upload className="w-5 h-5" />
                   </div>
 
                   <div className="space-y-1">
                     <div className="text-sm font-bold text-slate-800">
-                      Upload a selfie or headshot
+                      {isDragging ? 'Release to drop selfie!' : 'Drop, paste (Ctrl+V), or upload a selfie'}
                     </div>
                     <div className="text-xs text-slate-400">
                       Supports JPG, PNG, WEBP (Instant AI face matching)
