@@ -93,112 +93,20 @@ export const ParticipantFinder = ({ event, participants, photos, onOpenLightbox 
     video.play?.().catch(() => {});
   }, [isCameraActive, cameraStream]);
 
-  const capturePhoto = () => {
-    const video = videoRef.current;
-    if (!video || !video.videoWidth) {
-      setCameraError('The camera is still starting up — give it a second, then tap Capture again.');
-      return;
-    }
-    const canvas = document.createElement('canvas');
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    const ctx = canvas.getContext('2d');
-    if (ctx) {
-      ctx.drawImage(video, 0, 0);
-      const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
-      setSelfiePreview(dataUrl);
-      setSelectedParticipant(null);
-      stopCamera();
-      runSelfieSearch(dataUrl, null);
-    }
-  };
-
-  const stopCamera = () => {
+  const stopCamera = useCallback(() => {
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((track) => track.stop());
       streamRef.current = null;
     }
     setCameraStream(null);
     setIsCameraActive(false);
-  };
-
-  const [isDragging, setIsDragging] = useState(false);
-
-  const processImageFile = useCallback((file) => {
-    if (!file || !file.type.startsWith('image/')) return;
-    const reader = new FileReader();
-    reader.onload = (evt) => {
-      const dataUrl = evt.target?.result;
-      setSelfiePreview(dataUrl);
-      setSelectedParticipant(null);
-      runSelfieSearch(dataUrl, null);
-    };
-    reader.readAsDataURL(file);
-  }, [runSelfieSearch]);
-
-  const handleFileUpload = (e) => {
-    const file = e.target.files?.[0];
-    if (file) processImageFile(file);
-  };
-
-  const handleDragOver = useCallback((e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(true);
   }, []);
-
-  const handleDragLeave = useCallback((e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(false);
-  }, []);
-
-  const handleDrop = useCallback((e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(false);
-    const droppedFile = e.dataTransfer?.files?.[0];
-    if (droppedFile) processImageFile(droppedFile);
-  }, [processImageFile]);
-
-  useEffect(() => {
-    const handleGlobalPaste = (e) => {
-      const activeEl = document.activeElement;
-      if (activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA' || activeEl.isContentEditable)) {
-        return;
-      }
-      let pastedFile = null;
-      if (e.clipboardData?.files?.length > 0) {
-        for (let i = 0; i < e.clipboardData.files.length; i++) {
-          if (e.clipboardData.files[i].type.startsWith('image/')) {
-            pastedFile = e.clipboardData.files[i];
-            break;
-          }
-        }
-      }
-      if (!pastedFile && e.clipboardData?.items?.length > 0) {
-        for (let i = 0; i < e.clipboardData.items.length; i++) {
-          const item = e.clipboardData.items[i];
-          if (item.kind === 'file' && item.type.startsWith('image/')) {
-            pastedFile = item.getAsFile();
-            if (pastedFile) break;
-          }
-        }
-      }
-      if (pastedFile) {
-        processImageFile(pastedFile);
-      }
-    };
-
-    window.addEventListener('paste', handleGlobalPaste);
-    return () => window.removeEventListener('paste', handleGlobalPaste);
-  }, [processImageFile]);
 
   // The backend search is a single atomic call (no streaming), so we can't report
   // true byte-level progress. Instead we ease a bar toward ~92% through labelled
   // stages, then snap it to 100% the instant results land — enough to make the
   // wait feel alive and legible without faking specific backend steps.
-  const beginProgress = (stages) => {
+  const beginProgress = useCallback((stages) => {
     setScanProgress(6);
     setScanStep(stages[0].label);
     let pct = 6;
@@ -208,17 +116,17 @@ export const ParticipantFinder = ({ event, participants, photos, onOpenLightbox 
       const stage = [...stages].reverse().find((s) => pct >= s.at);
       if (stage) setScanStep(stage.label);
     }, 300);
-  };
+  }, []);
 
-  const finishProgress = async (timer) => {
+  const finishProgress = useCallback(async (timer) => {
     clearInterval(timer);
     setScanProgress(100);
     setScanStep('Complete');
     await new Promise((resolve) => setTimeout(resolve, 320));
-  };
+  }, []);
 
   // Real selfie search: server embeds the face and runs a NumPy cosine top-k.
-  const runSelfieSearch = async (imageSrc, participantId) => {
+  const runSelfieSearch = useCallback(async (imageSrc, participantId) => {
     setIsScanning(true);
     setSearchResults(null);
     setScanError(null);
@@ -251,7 +159,41 @@ export const ParticipantFinder = ({ event, participants, photos, onOpenLightbox 
     } finally {
       setIsScanning(false);
     }
+  }, [beginProgress, finishProgress, event.id, event.totalPhotos]);
+
+  const capturePhoto = () => {
+    const video = videoRef.current;
+    if (!video || !video.videoWidth) {
+      setCameraError('The camera is still starting up — give it a second, then tap Capture again.');
+      return;
+    }
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+      ctx.drawImage(video, 0, 0);
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
+      setSelfiePreview(dataUrl);
+      setSelectedParticipant(null);
+      stopCamera();
+      runSelfieSearch(dataUrl, null);
+    }
   };
+
+  const [isDragging, setIsDragging] = useState(false);
+
+  const processImageFile = useCallback((file) => {
+    if (!file || !file.type.startsWith('image/')) return;
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      const dataUrl = evt.target?.result;
+      setSelfiePreview(dataUrl);
+      setSelectedParticipant(null);
+      runSelfieSearch(dataUrl, null);
+    };
+    reader.readAsDataURL(file);
+  }, [runSelfieSearch]);
 
   // Real name / registration-ID search (server-side over linked faces).
   const runParticipantSearch = async (query) => {
