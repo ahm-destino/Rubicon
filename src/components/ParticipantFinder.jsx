@@ -195,6 +195,64 @@ export const ParticipantFinder = ({ event, participants, photos, onOpenLightbox 
     reader.readAsDataURL(file);
   }, [runSelfieSearch]);
 
+  const handleFileUpload = (e) => {
+    const file = e.target.files?.[0];
+    if (file) processImageFile(file);
+  };
+
+  const handleDragOver = useCallback((e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  }, []);
+
+  const handleDragLeave = useCallback((e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+  }, []);
+
+  const handleDrop = useCallback((e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+    const droppedFile = e.dataTransfer?.files?.[0];
+    if (droppedFile) processImageFile(droppedFile);
+  }, [processImageFile]);
+
+  useEffect(() => {
+    const handleGlobalPaste = (e) => {
+      const activeEl = document.activeElement;
+      if (activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA' || activeEl.isContentEditable)) {
+        return;
+      }
+      let pastedFile = null;
+      if (e.clipboardData?.files?.length > 0) {
+        for (let i = 0; i < e.clipboardData.files.length; i++) {
+          if (e.clipboardData.files[i].type.startsWith('image/')) {
+            pastedFile = e.clipboardData.files[i];
+            break;
+          }
+        }
+      }
+      if (!pastedFile && e.clipboardData?.items?.length > 0) {
+        for (let i = 0; i < e.clipboardData.items.length; i++) {
+          const item = e.clipboardData.items[i];
+          if (item.kind === 'file' && item.type.startsWith('image/')) {
+            pastedFile = item.getAsFile();
+            if (pastedFile) break;
+          }
+        }
+      }
+      if (pastedFile) {
+        processImageFile(pastedFile);
+      }
+    };
+
+    window.addEventListener('paste', handleGlobalPaste);
+    return () => window.removeEventListener('paste', handleGlobalPaste);
+  }, [processImageFile]);
+
   // Real name / registration-ID search (server-side over linked faces).
   const runParticipantSearch = async (query) => {
     if (!query) return;
