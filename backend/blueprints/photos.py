@@ -85,7 +85,9 @@ def bump_view(pid):
 @admin_required
 def upload_photos(event_id):
     """multipart/form-data: files[] + photographerId + sessionTag. Runs the real
-    detect+embed pipeline per file (synchronous) and returns the resulting jobs."""
+    detect+embed pipeline per file (synchronous) and returns the resulting jobs.
+    Duplicate images (matched by SHA-256 hash or filename) are skipped — no
+    second copy is created and the job is marked stage='skipped'."""
     if not db.session.get(Event, event_id):
         return jsonify({"error": "event not found"}), 404
     files = request.files.getlist("files")
@@ -96,6 +98,8 @@ def upload_photos(event_id):
     camera_info = request.form.get("cameraInfo", "")
 
     jobs = []
+    new_count = 0
+    skipped_count = 0
     for f in files:
         job = IngestionJob(
             id=new_id("job"), filename=f.filename, photographer_id=photographer_id,
@@ -104,15 +108,19 @@ def upload_photos(event_id):
         db.session.add(job)
         db.session.commit()
         try:
-            ingest_photo(event_id, photographer_id, session_tag, f.filename,
+            result = ingest_photo(event_id, photographer_id, session_tag, f.filename,
                          f.read(), camera_info=camera_info, job=job)
+            if job.stage == "skipped":
+                skipped_count += 1
+            else:
+                new_count += 1
         except Exception as exc:  # keep the batch going; surface per-file failure
             job.stage = "error"
             job.error = str(exc)
             db.session.commit()
         jobs.append(job.to_dict())
 
-    return jsonify({"jobs": jobs}), 201
+    return jsonify({"jobs": jobs, "new": new_count, "skipped": skipped_count}), 201
 
 
 @bp.post("/events/<event_id>/photos/from-picker")
@@ -155,6 +163,8 @@ def upload_from_picker(event_id):
         return jsonify({"jobs": [], "message": "No media items selected"}), 200
 
     jobs = []
+    new_count = 0
+    skipped_count = 0
     for item in items_data:
         media_file = item.get("mediaFile") or item
         base_url = media_file.get("baseUrl")
@@ -186,7 +196,7 @@ def upload_from_picker(event_id):
             dl_resp.raise_for_status()
             raw_bytes = dl_resp.content
 
-            # Ingest into storage + face recognition
+            # Ingest into storage + face recognition (skips if duplicate)
             ingest_photo(
                 event_id=event_id,
                 photographer_id=photographer_id,
@@ -196,6 +206,10 @@ def upload_from_picker(event_id):
                 camera_info=camera_info,
                 job=job,
             )
+            if job.stage == "skipped":
+                skipped_count += 1
+            else:
+                new_count += 1
         except Exception as exc:
             job.stage = "error"
             job.error = str(exc)
@@ -203,7 +217,7 @@ def upload_from_picker(event_id):
 
         jobs.append(job.to_dict())
 
-    return jsonify({"jobs": jobs}), 201
+    return jsonify({"jobs": jobs, "new": new_count, "skipped": skipped_count}), 201
 
 
 @bp.get("/ingestion-jobs/<jid>")

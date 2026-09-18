@@ -253,6 +253,7 @@ class Photo(db.Model):
     event_id = db.Column(db.String, db.ForeignKey("events.id"), nullable=False, index=True)
     photographer_id = db.Column(db.String, db.ForeignKey("photographers.id"), index=True)
     filename = db.Column(db.String, default="")
+    content_hash = db.Column(db.String(64), nullable=True, index=True)  # SHA-256 hex; NULL for pre-dedup photos
     url = db.Column(db.String, default="")
     high_res_url = db.Column(db.String, default="")
     thumbnail_url = db.Column(db.String, default="")
@@ -347,6 +348,7 @@ class IngestionJob(db.Model):
     preview_url = db.Column(db.String, default="")
     photo_id = db.Column(db.String, nullable=True)
     error = db.Column(db.String, nullable=True)
+    skipped_duplicate_of = db.Column(db.String, nullable=True)  # photo_id of the existing duplicate
     started_at = db.Column(db.DateTime(timezone=True), default=utcnow)
 
     def to_dict(self):
@@ -363,5 +365,6 @@ class IngestionJob(db.Model):
             "previewUrl": self.preview_url,
             "photoId": self.photo_id,
             "error": self.error,
+            "skippedDuplicateOf": self.skipped_duplicate_of,
             "startedAt": int(self.started_at.timestamp() * 1000) if self.started_at else None,
         }
