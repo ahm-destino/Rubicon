@@ -18,7 +18,7 @@ export default function App() {
       path.endsWith('/rubicon-ops') ||
       path.endsWith('/admin') ||
       params.has('admin') ||
-      params.has('ops')
+      params.has('ops') 
     ) {
       return 'admin';
     }

@@ -233,12 +233,40 @@ export const AdminPanel = ({
   // persists Photo + FaceDetection rows synchronously, returning the finished
   // IngestionJob rows. The first upload triggers a ~300 MB model download.
   const handleBatchUpload = async (fileList) => {
-    const files = fileList ? Array.from(fileList) : [];
-    if (files.length === 0) return;
+    const rawFiles = fileList ? Array.from(fileList) : [];
+    if (rawFiles.length === 0) return;
     if (!activePhotographer) {
       setUploadError('Add a photographer to this event before uploading.');
       return;
     }
+
+    // Local pre-check: Check against existing photos in this event by filename
+    const existingNames = new Set(
+      (photos || []).map((p) => (p.filename || '').toLowerCase()).filter(Boolean)
+    );
+
+    const localDuplicates = [];
+    const files = [];
+
+    for (const f of rawFiles) {
+      if (existingNames.has((f.name || '').toLowerCase())) {
+        localDuplicates.push(f);
+      } else {
+        files.push(f);
+      }
+    }
+
+    if (localDuplicates.length > 0) {
+      toast.info(
+        `Skipped ${localDuplicates.length} duplicate file${localDuplicates.length === 1 ? '' : 's'} locally.`
+      );
+    }
+
+    if (files.length === 0) {
+      if (uploadInputRef.current) uploadInputRef.current.value = '';
+      return;
+    }
+
     const sessionTag = (selectedSession || '').trim() || 'General';
 
     setIsUploading(true);
