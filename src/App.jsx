@@ -78,7 +78,7 @@ export default function App() {
     return Promise.all([
       api.listPhotographers(eventId),
       api.listParticipants(eventId),
-      api.listPhotos(eventId, { pageSize: 200 }),
+      api.listPhotos(eventId, { pageSize: 50000 }),
       api.storageStats(eventId).then((s) => s.provider).catch(() => null),
       api.getEvent(eventId),
     ]).then(([ph, pa, photoResp, storage, freshEvent]) => {
@@ -108,9 +108,16 @@ export default function App() {
     if (photo?.id) api.bumpView(photo.id).catch(() => { });
   };
 
-  // Real download: hits the backend (increments count) then streams the file.
+  // Real download: hits the backend (increments count) then streams the file as attachment.
   const handleDownloadSingle = (photo) => {
-    if (photo?.id) window.open(api.photoDownloadUrl(photo.id), '_blank');
+    if (!photo?.id) return;
+    const url = api.photoDownloadUrl(photo.id);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = photo.filename || `photo-${photo.id}.jpg`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   if (loading && !currentEvent) {

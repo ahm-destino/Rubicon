@@ -318,7 +318,14 @@ export const ParticipantFinder = ({ event, participants, photos, onOpenLightbox 
   });
 
   const handleDownloadSingle = (photo) => {
-    if (photo?.id) window.open(api.photoDownloadUrl(photo.id), '_blank');
+    if (!photo?.id) return;
+    const url = api.photoDownloadUrl(photo.id);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = photo.filename || `photo-${photo.id}.jpg`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   const handleDownloadZip = async (photosToDownload) => {

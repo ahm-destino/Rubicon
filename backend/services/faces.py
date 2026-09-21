@@ -11,7 +11,7 @@ The model is lazy-loaded (heavy import on first call) so the Flask app and
 import io
 
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageOps
 
 from config import Config
 
@@ -43,7 +43,8 @@ def _get_app():
 
 
 def _to_bgr(raw: bytes) -> np.ndarray:
-    img = Image.open(io.BytesIO(raw)).convert("RGB")
+    img = Image.open(io.BytesIO(raw))
+    img = ImageOps.exif_transpose(img).convert("RGB")
     arr = np.array(img)  # RGB
     return arr[:, :, ::-1].copy()  # -> BGR for insightface
 

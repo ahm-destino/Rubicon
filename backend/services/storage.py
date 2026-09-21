@@ -17,7 +17,7 @@ import io
 import os
 from datetime import datetime
 
-from PIL import Image
+from PIL import Image, ImageOps
 
 from config import Config
 from models import StorageAccount
@@ -159,6 +159,7 @@ def save_image(raw: bytes, event_id: str, filename: str) -> StorageResult:
     otherwise falls back to local disk (unchanged behavior)."""
     img = Image.open(io.BytesIO(raw))
     exif = _extract_exif(img)          # read metadata before RGB-flattening drops it
+    img = ImageOps.exif_transpose(img)  # transpose pixel matrix based on EXIF orientation tag
     img = img.convert("RGB")
     width, height = img.size
     key = new_id("gphotos_media")
