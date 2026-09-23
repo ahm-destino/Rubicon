@@ -11,7 +11,7 @@ Run:
 import os
 
 import click
-from flask import Flask, jsonify, send_from_directory
+from flask import Flask, current_app, jsonify, send_from_directory
 
 from config import Config
 from extensions import cors, db, limiter, migrate, oauth
@@ -99,7 +99,50 @@ def create_app():
         try:
             token = gdrive.access_token_for(account.refresh_token)
             upstream = gdrive.download_stream(token, file_id)
-        except gdrive.DriveError:
+        except gdrive.DriveError as exc:
+            alternate = None
+            if account.account_email:
+                alternate = (StorageAccount.query
+                    .filter_by(
+                        event_id=photo.event_id,
+                        provider="gdrive",
+                        account_email=account.account_email,
+                        status="active",
+                    )
+                    .filter(StorageAccount.id != account.id)
+                    .first())
+            if not alternate:
+                alternate = (StorageAccount.query
+                    .filter_by(
+                        event_id=photo.event_id,
+                        provider="gdrive",
+                        status="active",
+                    )
+                    .filter(StorageAccount.id != account.id)
+                    .first())
+            if alternate and alternate.refresh_token:
+                try:
+                    token = gdrive.access_token_for(alternate.refresh_token)
+                    upstream = gdrive.download_stream(token, file_id)
+                    account.refresh_token = alternate.refresh_token
+                    db.session.commit()
+                except gdrive.DriveError:
+                    upstream = None
+                if upstream is not None:
+                    resp = Response(
+                        stream_with_context(upstream.iter_content(chunk_size=65536)),
+                        content_type=upstream.headers.get("Content-Type", "image/jpeg"),
+                    )
+                    resp.headers["Cache-Control"] = "public, max-age=3600"
+                    return resp
+            current_app.logger.warning(
+                "Drive media proxy failed: key=%s variant=%s photo_id=%s "
+                "storage_account_id=%s file_id=%s status=%s error=%s",
+                key, variant, photo.id, account.id, file_id,
+                getattr(exc, "status_code", None), exc,
+            )
+            if getattr(exc, "status_code", None) == 404:
+                abort(404)
             abort(502)
         resp = Response(
             stream_with_context(upstream.iter_content(chunk_size=65536)),

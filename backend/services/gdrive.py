@@ -31,10 +31,20 @@ _token_cache: dict[str, tuple[str, float]] = {}
 class DriveError(RuntimeError):
     """Raised when a Drive API call fails."""
 
+    def __init__(self, message, status_code=None, response_text=""):
+        super().__init__(message)
+        self.status_code = status_code
+        self.response_text = response_text
+
 
 def _check(resp, action):
     if not resp.ok:
-        raise DriveError(f"Drive {action} failed ({resp.status_code}): {resp.text[:300]}")
+        body = resp.text[:300]
+        raise DriveError(
+            f"Drive {action} failed ({resp.status_code}): {body}",
+            status_code=resp.status_code,
+            response_text=body,
+        )
     return resp
 
 
@@ -52,6 +62,8 @@ def access_token_for(refresh_token: str) -> str:
         "refresh_token": refresh_token,
         "grant_type": "refresh_token",
     }, timeout=_TIMEOUT)
+    if not resp.ok:
+        _token_cache.pop(refresh_token, None)
     _check(resp, "token refresh")
     data = resp.json()
     token = data["access_token"]

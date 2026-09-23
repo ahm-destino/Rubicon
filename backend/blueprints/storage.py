@@ -13,7 +13,7 @@ from flask import Blueprint, g, jsonify, redirect, request, session
 from auth_utils import admin_required
 from config import Config
 from extensions import db, oauth
-from models import Event, StorageAccount
+from models import Event, StorageAccount, utcnow
 from services import gdrive
 from services.ids import new_id
 
@@ -80,6 +80,14 @@ def storage_callback():
         used_gb, total_gb = 0.0, 0.0
 
     _archive_active(event.id)
+    # Update refresh token on all existing Drive accounts for this event so existing photos keep loading seamlessly
+    existing_accounts = StorageAccount.query.filter_by(event_id=event.id, provider="gdrive").all()
+    for acc in existing_accounts:
+        acc.refresh_token = refresh_token
+        acc.last_synced_at = utcnow()
+        if email and not acc.account_email:
+            acc.account_email = email
+
     db.session.add(StorageAccount(
         id=new_id("stg"), event_id=event.id, provider="gdrive", account_email=email,
         refresh_token=refresh_token, root_folder_id=folder_id, status="active",
