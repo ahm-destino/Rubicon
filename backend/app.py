@@ -178,6 +178,15 @@ def create_app():
         run_seed()
         click.echo("Seed complete. Login: admin@rubicon.io / rubicon123")
 
+    @app.cli.command("ingest-zips")
+    @click.option("--dir", default=r"C:\Users\LENOVO\Downloads", help="Directory containing ZIP archives")
+    @click.option("--event", default="evt-abia-2026", help="Event ID")
+    @click.option("--pattern", default="ASLA*.zip", help="ZIP file glob pattern")
+    def ingest_zips_cmd(dir, event, pattern):
+        """Batch ingest photos from ZIP archives without manual extraction."""
+        from ingest_zips import batch_ingest_zips
+        batch_ingest_zips(downloads_dir=dir, event_id=event, pattern=pattern)
+
     return app
 
 
