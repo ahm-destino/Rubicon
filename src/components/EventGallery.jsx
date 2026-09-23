@@ -1,20 +1,28 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Search,
   Eye,
   Download,
   Maximize2,
 } from 'lucide-react';
+import { Pagination } from './ui/Pagination';
 
 export const EventGallery = ({
   event,
-  photos,
+  photos = [],
   onOpenLightbox,
   onDownloadSingle,
 }) => {
   const [selectedSession, setSelectedSession] = useState('All Sessions');
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState('popular');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(24);
+
+  // Reset to page 1 whenever filters or search query change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [selectedSession, searchQuery, sortBy]);
 
   const filteredPhotos = photos
     .filter((photo) => {
@@ -23,10 +31,10 @@ export const EventGallery = ({
       }
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
-        const matchesFile = photo.filename.toLowerCase().includes(q);
-        const matchesSession = photo.sessionTag.toLowerCase().includes(q);
-        const matchesPhotographer = photo.photographerName.toLowerCase().includes(q);
-        const matchesFace = photo.faces.some((f) =>
+        const matchesFile = (photo.filename || '').toLowerCase().includes(q);
+        const matchesSession = (photo.sessionTag || '').toLowerCase().includes(q);
+        const matchesPhotographer = (photo.photographerName || '').toLowerCase().includes(q);
+        const matchesFace = (photo.faces || []).some((f) =>
           f.participantName?.toLowerCase().includes(q)
         );
         if (!matchesFile && !matchesSession && !matchesPhotographer && !matchesFace) {
@@ -36,16 +44,25 @@ export const EventGallery = ({
       return true;
     })
     .sort((a, b) => {
-      if (sortBy === 'popular') return b.viewCount - a.viewCount;
-      if (sortBy === 'downloads') return b.downloadCount - a.downloadCount;
+      if (sortBy === 'popular') return (b.viewCount || 0) - (a.viewCount || 0);
+      if (sortBy === 'downloads') return (b.downloadCount || 0) - (a.downloadCount || 0);
       if (sortBy === 'taken') {
-        // Actual capture date from EXIF; falls back to upload time when a
-        // photo carries no EXIF timestamp, so ordering is always sensible.
         const taken = (p) => new Date(p.exif?.capturedAt || p.uploadedAt).getTime();
         return taken(b) - taken(a);
       }
       return new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime();
     });
+
+  const totalPages = Math.ceil(filteredPhotos.length / pageSize) || 1;
+  const paginatedPhotos = filteredPhotos.slice(
+    (currentPage - 1) * pageSize,
+    currentPage * pageSize
+  );
+
+  const handlePageChange = (newPage) => {
+    setCurrentPage(newPage);
+    window.scrollTo({ top: 300, behavior: 'smooth' });
+  };
 
   return (
     <div className="space-y-6">
@@ -70,7 +87,7 @@ export const EventGallery = ({
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value)}
-              className="bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-indigo-600"
+              className="bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-indigo-600 cursor-pointer shadow-xs font-medium"
             >
               <option value="taken">Date Taken (newest)</option>
               <option value="newest">Recently Uploaded</option>
@@ -84,7 +101,7 @@ export const EventGallery = ({
         <div className="flex flex-wrap items-center gap-2 pt-3 border-t border-slate-100 text-xs">
           <div className="flex items-center space-x-1.5 overflow-x-auto pb-1 max-w-full">
             <span className="text-slate-400 font-bold text-[11px] uppercase tracking-wider shrink-0">Sessions:</span>
-            {event.sessions.map((sess) => (
+            {(event?.sessions || ['All Sessions']).map((sess) => (
               <button
                 key={sess}
                 onClick={() => setSelectedSession(sess)}
@@ -101,11 +118,11 @@ export const EventGallery = ({
         </div>
       </div>
 
-      {/* Photo count header */}
-      <div className="flex items-center justify-between text-xs text-slate-500 px-1">
+      {/* Photo count header & Pagination top bar */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between text-xs text-slate-500 px-1 gap-2">
         <span>
-          Showing <strong className="text-slate-900">{filteredPhotos.length}</strong> of{' '}
-          <strong className="text-slate-900">{photos.length}</strong> published photos
+          Showing <strong className="text-slate-900 font-bold">{filteredPhotos.length.toLocaleString()}</strong> of{' '}
+          <strong className="text-slate-900 font-bold">{(event?.totalPhotos || photos.length).toLocaleString()}</strong> photos in database
         </span>
         <span className="text-emerald-700 font-mono font-medium">Live Media Store</span>
       </div>
@@ -122,7 +139,7 @@ export const EventGallery = ({
 
       {/* Photos Masonry / Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-        {filteredPhotos.map((photo) => (
+        {paginatedPhotos.map((photo) => (
           <div
             key={photo.id}
             className="group relative bg-white rounded-2xl overflow-hidden border border-slate-200 hover:border-slate-300 shadow-sm transition-all"
@@ -156,14 +173,14 @@ export const EventGallery = ({
               {/* Faces count tag */}
               <div className="absolute top-2.5 left-2.5 bg-white/95 backdrop-blur-md px-2 py-0.5 rounded text-[10px] text-slate-700 font-bold border border-slate-200 shadow-sm flex items-center space-x-1.5">
                 <span className="w-1.5 h-1.5 rounded-full bg-indigo-600" />
-                <span>{photo.faces.length} Faces Tagged</span>
+                <span>{(photo.faces || []).length} Faces Tagged</span>
               </div>
             </div>
 
             {/* Footer */}
             <div className="p-3 bg-white border-t border-slate-100 flex items-center justify-between text-xs">
               <span className="text-[11px] text-slate-600 font-medium truncate max-w-[150px]" title={photo.filename}>
-                {photo.filename.replace(/^IMG_|^DSC_|^NIK_|^GFX_/, '')}
+                {(photo.filename || '').replace(/^IMG_|^DSC_|^NIK_|^GFX_/, '')}
               </span>
               <div className="flex items-center space-x-1">
                 <button
@@ -185,6 +202,17 @@ export const EventGallery = ({
           </div>
         ))}
       </div>
+
+      {/* Pagination Controls */}
+      <Pagination
+        currentPage={currentPage}
+        totalPages={totalPages}
+        pageSize={pageSize}
+        totalItems={filteredPhotos.length}
+        onPageChange={handlePageChange}
+        onPageSizeChange={setPageSize}
+        pageSizeOptions={[24, 48, 96]}
+      />
     </div>
   );
 };

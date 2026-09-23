@@ -3,6 +3,7 @@ import { api } from '../api';
 import { matchSelfieToPhotos, searchPhotosByParticipant } from '../utils/faceMatcher';
 import { downloadPhotosAsZip } from '../utils/zipDownloader';
 import confetti from 'canvas-confetti';
+import { Pagination } from './ui/Pagination';
 import {
   Camera,
   Upload,
@@ -27,6 +28,12 @@ export const ParticipantFinder = ({ event, participants, photos, onOpenLightbox 
   const [searchResults, setSearchResults] = useState(null);
   const [sessionFilter, setSessionFilter] = useState('All');
   const [showFaceBoxes, setShowFaceBoxes] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(24);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchResults, sessionFilter]);
 
   // Zip downloading state
   const [isZipping, setIsZipping] = useState(false);
@@ -719,83 +726,97 @@ export const ParticipantFinder = ({ event, participants, photos, onOpenLightbox 
 
           {/* Photos Grid */}
           {filteredMatches.length > 0 ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-              {filteredMatches.map(({ photo, matchedFace, similarity }) => (
-                <div
-                  key={photo.id}
-                  className="group relative bg-white rounded-2xl overflow-hidden border border-slate-200 hover:border-slate-300 shadow-sm transition-all"
-                >
-                  {/* Thumbnail */}
-                  <div
-                    className="relative aspect-4/3 overflow-hidden cursor-pointer bg-slate-900"
-                    onClick={() => onOpenLightbox(photo, selectedParticipant?.id)}
-                  >
-                    <img
-                      src={photo.thumbnailUrl || photo.url}
-                      alt={photo.filename}
-                      loading="lazy"
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                    />
-
-                    {/* Face Bounding Box */}
-                    {showFaceBoxes && matchedFace && (
+            <>
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                {filteredMatches
+                  .slice((currentPage - 1) * pageSize, currentPage * pageSize)
+                  .map(({ photo, matchedFace, similarity }) => (
+                    <div
+                      key={photo.id}
+                      className="group relative bg-white rounded-2xl overflow-hidden border border-slate-200 hover:border-slate-300 shadow-sm transition-all"
+                    >
+                      {/* Thumbnail */}
                       <div
-                        style={{
-                          left: `${matchedFace.box.x}%`,
-                          top: `${matchedFace.box.y}%`,
-                          width: `${matchedFace.box.width}%`,
-                          height: `${matchedFace.box.height}%`,
-                        }}
-                        className="absolute border-2 border-indigo-400 bg-indigo-500/20 rounded pointer-events-none shadow-[0_0_8px_rgba(99,102,241,0.5)]"
-                      />
-                    )}
-
-                    {/* Hover Overlay */}
-                    <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity p-3 flex flex-col justify-between">
-                      <div className="flex justify-end">
-                        <span className="p-1.5 rounded-lg bg-white/90 text-slate-900 backdrop-blur-sm shadow">
-                          <Maximize2 className="w-3.5 h-3.5" />
-                        </span>
-                      </div>
-                      <div className="text-white text-xs">
-                        <div className="font-semibold truncate">{photo.sessionTag}</div>
-                        <div className="text-[11px] text-slate-300 font-mono">By {photo.photographerName}</div>
-                      </div>
-                    </div>
-
-                    {/* Match Confidence Tag */}
-                    <div className="absolute top-2.5 left-2.5 bg-white/95 backdrop-blur-sm border border-slate-200 text-emerald-700 text-[10px] font-bold px-2 py-0.5 rounded-md flex items-center space-x-1.5 shadow-sm">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                      <span>{Math.round(similarity * 100)}% Match</span>
-                    </div>
-                  </div>
-
-                  {/* Footer */}
-                  <div className="p-3 flex items-center justify-between bg-white border-t border-slate-100 text-xs">
-                    <span className="text-[11px] text-slate-600 font-medium truncate max-w-[130px]" title={photo.filename}>
-                      {photo.filename.replace(/^IMG_|^DSC_|^NIK_|^GFX_/, '')}
-                    </span>
-
-                    <div className="flex items-center space-x-1">
-                      <button
+                        className="relative aspect-4/3 overflow-hidden cursor-pointer bg-slate-900"
                         onClick={() => onOpenLightbox(photo, selectedParticipant?.id)}
-                        className="p-1 text-slate-400 hover:text-slate-900 rounded cursor-pointer"
-                        title="View High-Res"
                       >
-                        <Eye className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        onClick={() => handleDownloadSingle(photo)}
-                        className="p-1 text-slate-400 hover:text-indigo-600 rounded cursor-pointer"
-                        title="Download photo"
-                      >
-                        <Download className="w-3.5 h-3.5" />
-                      </button>
+                        <img
+                          src={photo.thumbnailUrl || photo.url}
+                          alt={photo.filename}
+                          loading="lazy"
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                        />
+
+                        {/* Face Bounding Box */}
+                        {showFaceBoxes && matchedFace && (
+                          <div
+                            style={{
+                              left: `${matchedFace.box.x}%`,
+                              top: `${matchedFace.box.y}%`,
+                              width: `${matchedFace.box.width}%`,
+                              height: `${matchedFace.box.height}%`,
+                            }}
+                            className="absolute border-2 border-indigo-400 bg-indigo-500/20 rounded pointer-events-none shadow-[0_0_8px_rgba(99,102,241,0.5)]"
+                          />
+                        )}
+
+                        {/* Hover Overlay */}
+                        <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity p-3 flex flex-col justify-between">
+                          <div className="flex justify-end">
+                            <span className="p-1.5 rounded-lg bg-white/90 text-slate-900 backdrop-blur-sm shadow">
+                              <Maximize2 className="w-3.5 h-3.5" />
+                            </span>
+                          </div>
+                          <div className="text-white text-xs">
+                            <div className="font-semibold truncate">{photo.sessionTag}</div>
+                            <div className="text-[11px] text-slate-300 font-mono">By {photo.photographerName}</div>
+                          </div>
+                        </div>
+
+                        {/* Match Confidence Tag */}
+                        <div className="absolute top-2.5 left-2.5 bg-white/95 backdrop-blur-sm border border-slate-200 text-emerald-700 text-[10px] font-bold px-2 py-0.5 rounded-md flex items-center space-x-1.5 shadow-sm">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                          <span>{Math.round(similarity * 100)}% Match</span>
+                        </div>
+                      </div>
+
+                      {/* Footer */}
+                      <div className="p-3 flex items-center justify-between bg-white border-t border-slate-100 text-xs">
+                        <span className="text-[11px] text-slate-600 font-medium truncate max-w-[130px]" title={photo.filename}>
+                          {(photo.filename || '').replace(/^IMG_|^DSC_|^NIK_|^GFX_/, '')}
+                        </span>
+
+                        <div className="flex items-center space-x-1">
+                          <button
+                            onClick={() => onOpenLightbox(photo, selectedParticipant?.id)}
+                            className="p-1 text-slate-400 hover:text-slate-900 rounded cursor-pointer"
+                            title="View High-Res"
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => handleDownloadSingle(photo)}
+                            className="p-1 text-slate-400 hover:text-indigo-600 rounded cursor-pointer"
+                            title="Download photo"
+                          >
+                            <Download className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                </div>
-              ))}
-            </div>
+                  ))}
+              </div>
+
+              <Pagination
+                currentPage={currentPage}
+                totalPages={Math.ceil(filteredMatches.length / pageSize) || 1}
+                pageSize={pageSize}
+                totalItems={filteredMatches.length}
+                onPageChange={setCurrentPage}
+                onPageSizeChange={setPageSize}
+                pageSizeOptions={[24, 48, 96]}
+              />
+            </>
           ) : (
             searchResults.length > 0 && (
               <div className="text-center py-16 bg-white rounded-2xl border border-slate-200 space-y-3 shadow-sm">

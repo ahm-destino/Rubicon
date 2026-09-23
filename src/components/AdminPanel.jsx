@@ -42,13 +42,14 @@ import { UserModal } from './admin/UserModal';
 import { AttendeePhotosModal } from './admin/AttendeePhotosModal';
 import { EventModal } from './admin/EventModal';
 import { StorageConnectModal } from './admin/StorageConnectModal';
+import { Pagination } from './ui/Pagination';
 
 export const AdminPanel = ({
   event,
   events = [],
   photographers,
   participants,
-  photos,
+  photos = [],
   storageConfig,
   onUploadPhotos,
   onDataChanged,
@@ -60,13 +61,14 @@ export const AdminPanel = ({
 }) => {
   const toast = useToast();
 
-  // Three focused tabs: the working ingest path leads. Google account linking
-  // was removed from the console because connecting Google cannot import photos
-  // (Google closed third-party library access on 2025-03-31).
   const [activeTab, setActiveTab] = useState('photos');
   const [showQrModal, setShowQrModal] = useState(false);
   const [qrDataUrl, setQrDataUrl] = useState('');
   const [copiedLink, setCopiedLink] = useState(false);
+
+  // Photo Catalog pagination state
+  const [catalogPage, setCatalogPage] = useState(1);
+  const [catalogPageSize, setCatalogPageSize] = useState(24);
 
   // Upload state
   const [selectedPhotographerId, setSelectedPhotographerId] = useState(photographers[0]?.id || '');
@@ -678,14 +680,16 @@ export const AdminPanel = ({
     );
   }
 
+  const totalPhotosCount = event?.totalPhotos ?? photos.length;
+
   const tabs = [
-    { id: 'photos', label: 'Photos & Upload', icon: Upload, count: photos.length || undefined },
+    { id: 'photos', label: 'Photos & Upload', icon: Upload, count: totalPhotosCount || undefined },
     { id: 'attendees', label: 'Attendees', icon: Users, badge: `${coverageRate}%` },
     { id: 'settings', label: 'Settings', icon: Settings },
   ];
 
   const strip = [
-    { icon: FileImage, label: 'Photos', value: photos.length.toLocaleString(), tone: 'text-indigo-600' },
+    { icon: FileImage, label: 'Photos', value: totalPhotosCount.toLocaleString(), tone: 'text-indigo-600' },
     { icon: UserCheck, label: 'Coverage', value: `${coverageRate}%`, tone: 'text-emerald-600' },
     { icon: Camera, label: 'Crew', value: photographers.length, tone: 'text-slate-700' },
     { icon: Download, label: 'Downloads', value: totalDownloads.toLocaleString(), tone: 'text-indigo-600' },
@@ -1075,37 +1079,51 @@ export const AdminPanel = ({
                 <h3 className="text-sm font-bold text-slate-900">Photo catalog</h3>
                 <p className="text-xs text-slate-500">Every capture indexed for this event. Hover a photo to delete it.</p>
               </div>
-              <span className="text-xs text-slate-400 font-mono">
-                {photos.length} total
+              <span className="text-xs text-slate-600 font-mono font-bold">
+                {totalPhotosCount.toLocaleString()} total photos
               </span>
             </div>
 
             {photos.length > 0 ? (
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
-                {photos.map((photo) => (
-                  <div
-                    key={photo.id}
-                    className="group relative aspect-4/3 rounded-xl overflow-hidden bg-slate-900 border border-slate-200"
-                  >
-                    <img
-                      src={photo.thumbnailUrl || photo.url}
-                      alt={photo.filename}
-                      onClick={() => onOpenLightbox(photo)}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform cursor-pointer"
-                    />
-                    <button
-                      onClick={(e) => { e.stopPropagation(); askDeletePhoto(photo); }}
-                      title="Delete photo"
-                      className="absolute top-1 right-1 p-1.5 rounded-lg bg-black/60 hover:bg-rose-600 text-white opacity-0 group-hover:opacity-100 transition-all cursor-pointer"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                    <div className="absolute bottom-1 left-1 bg-black/70 backdrop-blur-sm text-white px-1.5 py-0.5 rounded text-[9px] font-mono pointer-events-none">
-                      {photo.faces.length} faces
-                    </div>
-                  </div>
-                ))}
-              </div>
+              <>
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
+                  {photos
+                    .slice((catalogPage - 1) * catalogPageSize, catalogPage * catalogPageSize)
+                    .map((photo) => (
+                      <div
+                        key={photo.id}
+                        className="group relative aspect-4/3 rounded-xl overflow-hidden bg-slate-900 border border-slate-200"
+                      >
+                        <img
+                          src={photo.thumbnailUrl || photo.url}
+                          alt={photo.filename}
+                          onClick={() => onOpenLightbox(photo)}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform cursor-pointer"
+                        />
+                        <button
+                          onClick={(e) => { e.stopPropagation(); askDeletePhoto(photo); }}
+                          title="Delete photo"
+                          className="absolute top-1 right-1 p-1.5 rounded-lg bg-black/60 hover:bg-rose-600 text-white opacity-0 group-hover:opacity-100 transition-all cursor-pointer"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                        <div className="absolute bottom-1 left-1 bg-black/70 backdrop-blur-sm text-white px-1.5 py-0.5 rounded text-[9px] font-mono pointer-events-none">
+                          {(photo.faces || []).length} faces
+                        </div>
+                      </div>
+                    ))}
+                </div>
+
+                <Pagination
+                  currentPage={catalogPage}
+                  totalPages={Math.ceil(photos.length / catalogPageSize) || 1}
+                  pageSize={catalogPageSize}
+                  totalItems={photos.length}
+                  onPageChange={setCatalogPage}
+                  onPageSizeChange={setCatalogPageSize}
+                  pageSizeOptions={[24, 48, 96]}
+                />
+              </>
             ) : (
               <div className="py-10 text-center text-xs text-slate-500 bg-slate-50 rounded-xl border border-slate-200">
                 No photos yet. Drop some into the upload zone above to see them here.

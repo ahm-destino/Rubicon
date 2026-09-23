@@ -142,7 +142,8 @@ class Event(db.Model):
     photos = db.relationship("Photo", backref="event", cascade="all, delete-orphan")
 
     def to_dict(self):
-        photos = self.photos
+        total_cnt = Photo.query.filter_by(event_id=self.id).count()
+        pub_cnt = Photo.query.filter_by(event_id=self.id, status="published").count()
         return {
             "id": self.id,
             "name": self.name,
@@ -151,8 +152,8 @@ class Event(db.Model):
             "location": self.location,
             "date": self.date,
             "coverImage": self.cover_image,
-            "totalPhotos": len(photos),
-            "publishedPhotos": sum(1 for p in photos if p.status == "published"),
+            "totalPhotos": total_cnt,
+            "publishedPhotos": pub_cnt if pub_cnt > 0 else total_cnt,
             "photographerCount": len(self.photographers),
             "participantCount": len(self.participants),
             "retrievedParticipantCount": sum(1 for p in self.participants if p.has_found_photos),
