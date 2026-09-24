@@ -13,6 +13,7 @@ the face-intelligence layer never cares where bytes live. Two backends exist:
 routes deletion back to whichever account holds the photo, so old photos keep
 working after an event switches Drive accounts.
 """
+import gc
 import io
 import os
 from datetime import datetime
@@ -25,7 +26,9 @@ from services import gdrive
 from services.ids import new_id
 
 THUMB_MAX = 512
-WEB_MAX = 1600
+WEB_MAX   = 1600
+# No cap on originals — full camera resolution is preserved.
+# gc.collect() between encodes keeps peak RAM usage manageable.
 
 
 class StorageResult:
@@ -65,8 +68,13 @@ def _resize(img: Image.Image, max_side: int) -> Image.Image:
 
 def _encode(img: Image.Image, max_side: int | None, quality: int) -> bytes:
     buf = io.BytesIO()
-    (img if max_side is None else _resize(img, max_side)).save(buf, "JPEG", quality=quality)
-    return buf.getvalue()
+    resized = img if max_side is None else _resize(img, max_side)
+    resized.save(buf, "JPEG", quality=quality, optimize=False)
+    data = buf.getvalue()
+    buf.close()
+    del buf
+    gc.collect()
+    return data
 
 
 # --- EXIF extraction -------------------------------------------------------
@@ -156,17 +164,41 @@ def _extract_exif(img: Image.Image):
 def save_image(raw: bytes, event_id: str, filename: str) -> StorageResult:
     """Persist original + web + thumbnail derivatives, return their URLs + dims.
     Uploads to the event's active Google Drive account when one is connected,
-    otherwise falls back to local disk (unchanged behavior)."""
+    otherwise falls back to local disk (unchanged behavior).
+
+    Large DSLR images (45 MP+) are capped at ORIG_MAX on the longest side so
+    Pillow does not exhaust the process heap while encoding the JPEG buffers.
+    """
+    # Raise Pillow's decompression-bomb threshold for legitimate large photos
+    Image.MAX_IMAGE_PIXELS = 250_000_000   # ~250 MP; blocks truly malicious files
+
     img = Image.open(io.BytesIO(raw))
-    exif = _extract_exif(img)          # read metadata before RGB-flattening drops it
-    img = ImageOps.exif_transpose(img)  # transpose pixel matrix based on EXIF orientation tag
+    exif = _extract_exif(img)           # read metadata before RGB-flattening drops it
+    img = ImageOps.exif_transpose(img)  # rotate pixel matrix per EXIF orientation tag
     img = img.convert("RGB")
     width, height = img.size
     key = new_id("gphotos_media")
 
-    orig_bytes = _encode(img, None, 95)
-    web_bytes = _encode(img, WEB_MAX, 88)
-    thumb_bytes = _encode(img, THUMB_MAX, 80)
+    try:
+        orig_bytes  = _encode(img, None,      95)  # full original resolution
+        web_bytes   = _encode(img, WEB_MAX,   88)
+        thumb_bytes = _encode(img, THUMB_MAX, 80)
+    except (MemoryError, OSError) as exc:
+        # Last-resort fallback: shrink to 4000px and retry once
+        gc.collect()
+        img = _resize(img, 4000)
+        try:
+            orig_bytes  = _encode(img, None,      92)
+            web_bytes   = _encode(img, WEB_MAX,   85)
+            thumb_bytes = _encode(img, THUMB_MAX, 78)
+        except (MemoryError, OSError):
+            raise MemoryError(
+                f"Image too large to process even at 4000px "
+                f"({width}x{height} px, {len(raw)//1024} KB raw): {exc}"
+            ) from exc
+    finally:
+        del img
+        gc.collect()
 
     account = active_account(event_id)
     if account and account.provider == "gdrive":

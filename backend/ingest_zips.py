@@ -12,6 +12,7 @@ import argparse
 import glob
 import hashlib
 import os
+import traceback
 import zipfile
 
 from app import app
@@ -57,6 +58,21 @@ def batch_ingest_zips(
         print(f"Source Directory: {downloads_dir}")
         print("=" * 45)
 
+        # ------------------------------------------------------------------
+        # LOCAL duplicate index — one DB query at startup, zero per-photo.
+        # Load every known hash and filename for this event into memory sets.
+        # New photos are inserted into the sets immediately so within-batch
+        # duplicates (same photo in two ZIPs) are also caught.
+        # ------------------------------------------------------------------
+        print("Building local duplicate index from database...")
+        existing = Photo.query.filter_by(event_id=event_id).with_entities(
+            Photo.content_hash, Photo.filename
+        ).all()
+        known_hashes    = {row.content_hash for row in existing if row.content_hash}
+        known_filenames = {row.filename     for row in existing if row.filename}
+        print(f"  Loaded {len(known_hashes):,} hashes + {len(known_filenames):,} filenames into local index.")
+        print("=" * 45)
+
         total_new = 0
         total_skipped = 0
         total_errors = 0
@@ -87,18 +103,9 @@ def batch_ingest_zips(
                             if not raw_bytes:
                                 continue
 
-                            # Pre-check: compute hash and query DB directly
-                            # (mirrors _find_duplicate in services/ingest.py)
+                            # Local duplicate check — O(1) set lookup, no DB query
                             content_hash = hashlib.sha256(raw_bytes).hexdigest()
-                            is_dup = Photo.query.filter_by(
-                                event_id=event_id, content_hash=content_hash
-                            ).first() is not None
-
-                            if not is_dup:
-                                # Fallback filename check for pre-hash photos
-                                is_dup = Photo.query.filter_by(
-                                    event_id=event_id, filename=fname
-                                ).first() is not None
+                            is_dup = (content_hash in known_hashes) or (fname in known_filenames)
 
                             photo = ingest_photo(
                                 event_id=event_id,
@@ -116,13 +123,19 @@ def batch_ingest_zips(
                             else:
                                 total_new += 1
                                 status_str = "NEW -> Saved & Indexed"
+                                # Update local index so same photo in a later ZIP is caught
+                                known_hashes.add(content_hash)
+                                known_filenames.add(fname)
 
                             if i_idx % 10 == 0 or i_idx == len(img_entries):
                                 print(f"  [{i_idx}/{len(img_entries)}] {fname} -> {status_str}")
 
                         except Exception as exc:
                             total_errors += 1
-                            print(f"  [{i_idx}/{len(img_entries)}] ERROR on {fname}: {exc}")
+                            err_msg = repr(exc) if not str(exc).strip() else str(exc)
+                            print(f"  [{i_idx}/{len(img_entries)}] ERROR on {fname}: {err_msg}")
+                            if not isinstance(exc, MemoryError):
+                                traceback.print_exc()
 
             except Exception as z_exc:
                 print(f"Failed to read ZIP file {z_name}: {z_exc}")
