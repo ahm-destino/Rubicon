@@ -60,9 +60,10 @@ def batch_ingest_zips(
 
         # ------------------------------------------------------------------
         # LOCAL duplicate index — one DB query at startup, zero per-photo.
-        # Load every known hash and filename for this event into memory sets.
-        # New photos are inserted into the sets immediately so within-batch
-        # duplicates (same photo in two ZIPs) are also caught.
+        # Loads known hashes AND filenames for this event into memory sets.
+        # Checks hash first (rename-safe), filename as fallback (pre-hash photos).
+        # Both sets are updated after each new ingest so within-batch duplicates
+        # (same photo appearing in two different ZIPs) are also caught.
         # ------------------------------------------------------------------
         print("Building local duplicate index from database...")
         existing = Photo.query.filter_by(event_id=event_id).with_entities(
@@ -103,7 +104,7 @@ def batch_ingest_zips(
                             if not raw_bytes:
                                 continue
 
-                            # Local duplicate check — O(1) set lookup, no DB query
+                            # Hash + filename duplicate check (O(1) set lookups, no DB query)
                             content_hash = hashlib.sha256(raw_bytes).hexdigest()
                             is_dup = (content_hash in known_hashes) or (fname in known_filenames)
 
@@ -123,7 +124,7 @@ def batch_ingest_zips(
                             else:
                                 total_new += 1
                                 status_str = "NEW -> Saved & Indexed"
-                                # Update local index so same photo in a later ZIP is caught
+                                # Update local sets so same photo in a later ZIP is caught
                                 known_hashes.add(content_hash)
                                 known_filenames.add(fname)
 

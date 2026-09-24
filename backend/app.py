@@ -81,7 +81,11 @@ def create_app():
     def media_drive(key, variant):
         """Stream a Drive-backed photo derivative. Public, like the local /media
         route (participants are unauthenticated). `key` is the photo's storage key
-        (google_media_id); `variant` is orig | web | thumb."""
+        (google_media_id); `variant` is orig | web | thumb.
+
+        Falls back to the event's active account when the photo's own account
+        has a revoked/missing token (e.g. after a Drive reconnection).
+        """
         from flask import Response, abort, stream_with_context
 
         from models import Photo, StorageAccount
@@ -93,57 +97,52 @@ def create_app():
         if not photo or not photo.storage_account_id or not photo.storage_meta:
             abort(404)
         file_id = photo.storage_meta.get(variant)
-        account = db.session.get(StorageAccount, photo.storage_account_id)
-        if not file_id or not account or not account.refresh_token:
+        if not file_id:
             abort(404)
-        try:
-            token = gdrive.access_token_for(account.refresh_token)
-            upstream = gdrive.download_stream(token, file_id)
-        except gdrive.DriveError as exc:
-            alternate = None
-            if account.account_email:
-                alternate = (StorageAccount.query
-                    .filter_by(
-                        event_id=photo.event_id,
-                        provider="gdrive",
-                        account_email=account.account_email,
-                        status="active",
-                    )
-                    .filter(StorageAccount.id != account.id)
-                    .first())
-            if not alternate:
-                alternate = (StorageAccount.query
-                    .filter_by(
-                        event_id=photo.event_id,
-                        provider="gdrive",
-                        status="active",
-                    )
-                    .filter(StorageAccount.id != account.id)
-                    .first())
-            if alternate and alternate.refresh_token:
+
+        account = db.session.get(StorageAccount, photo.storage_account_id)
+
+        upstream = None
+        working_account = None
+
+        # 1. Try the photo's own account first (if it has a token)
+        if account and account.refresh_token:
+            try:
+                token = gdrive.access_token_for(account.refresh_token)
+                upstream = gdrive.download_stream(token, file_id)
+                working_account = account
+            except gdrive.DriveError:
+                upstream = None
+
+        # 2. Fallback: try ANY active account for this event
+        #    (covers archived/disconnected accounts with revoked tokens)
+        if upstream is None:
+            fallback = (
+                StorageAccount.query
+                .filter_by(event_id=photo.event_id, provider="gdrive", status="active")
+                .filter(StorageAccount.refresh_token.isnot(None))
+                .first()
+            )
+            if fallback and fallback.refresh_token:
                 try:
-                    token = gdrive.access_token_for(alternate.refresh_token)
+                    token = gdrive.access_token_for(fallback.refresh_token)
                     upstream = gdrive.download_stream(token, file_id)
-                    account.refresh_token = alternate.refresh_token
-                    db.session.commit()
+                    working_account = fallback
+                    # Backfill the working token onto the photo's account so
+                    # future requests hit path 1 directly (self-healing).
+                    if account:
+                        account.refresh_token = fallback.refresh_token
+                        db.session.commit()
                 except gdrive.DriveError:
                     upstream = None
-                if upstream is not None:
-                    resp = Response(
-                        stream_with_context(upstream.iter_content(chunk_size=65536)),
-                        content_type=upstream.headers.get("Content-Type", "image/jpeg"),
-                    )
-                    resp.headers["Cache-Control"] = "public, max-age=3600"
-                    return resp
+
+        if upstream is None:
             current_app.logger.warning(
-                "Drive media proxy failed: key=%s variant=%s photo_id=%s "
-                "storage_account_id=%s file_id=%s status=%s error=%s",
-                key, variant, photo.id, account.id, file_id,
-                getattr(exc, "status_code", None), exc,
+                "Drive media proxy failed for all accounts: key=%s variant=%s photo_id=%s",
+                key, variant, photo.id,
             )
-            if getattr(exc, "status_code", None) == 404:
-                abort(404)
             abort(502)
+
         resp = Response(
             stream_with_context(upstream.iter_content(chunk_size=65536)),
             content_type=upstream.headers.get("Content-Type", "image/jpeg"),
