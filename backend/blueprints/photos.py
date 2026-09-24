@@ -19,7 +19,7 @@ def list_photos(event_id):
     q = (request.args.get("q") or "").strip().lower()
     sort = request.args.get("sort", "newest")
     page = max(1, int(request.args.get("page", 1)))
-    page_size = min(50000, int(request.args.get("pageSize", 1000)))
+    page_size = min(1000, int(request.args.get("pageSize", 100)))
 
     query = Photo.query.filter_by(event_id=event_id)
     if session and session != "All Sessions":
@@ -34,8 +34,10 @@ def list_photos(event_id):
     else:
         query = query.order_by(Photo.uploaded_at.desc())
 
-    rows = query.all()
-    if q:  # text search across filename / session / photographer / detected names
+    if q:
+        # Text search can't be pushed to DB without full-text indexes —
+        # load all matching rows, filter in Python, then re-paginate.
+        rows = query.all()
         def match(p):
             hay = " ".join([
                 p.filename or "", p.session_tag or "",
@@ -44,10 +46,14 @@ def list_photos(event_id):
             ]).lower()
             return q in hay
         rows = [p for p in rows if match(p)]
+        total = len(rows)
+        start = (page - 1) * page_size
+        page_rows = rows[start:start + page_size]
+    else:
+        # DB-level pagination: only fetch the requested page — fast for large events.
+        total = query.count()
+        page_rows = query.offset((page - 1) * page_size).limit(page_size).all()
 
-    total = len(rows)
-    start = (page - 1) * page_size
-    page_rows = rows[start:start + page_size]
     return jsonify({"items": [p.to_dict() for p in page_rows], "total": total})
 
 

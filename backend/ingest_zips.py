@@ -10,13 +10,13 @@ Usage:
 """
 import argparse
 import glob
+import hashlib
 import os
-import sys
 import zipfile
 
 from app import app
 from extensions import db
-from models import Event, Photographer
+from models import Event, Photo, Photographer
 from services.ingest import ingest_photo
 
 
@@ -87,6 +87,19 @@ def batch_ingest_zips(
                             if not raw_bytes:
                                 continue
 
+                            # Pre-check: compute hash and query DB directly
+                            # (mirrors _find_duplicate in services/ingest.py)
+                            content_hash = hashlib.sha256(raw_bytes).hexdigest()
+                            is_dup = Photo.query.filter_by(
+                                event_id=event_id, content_hash=content_hash
+                            ).first() is not None
+
+                            if not is_dup:
+                                # Fallback filename check for pre-hash photos
+                                is_dup = Photo.query.filter_by(
+                                    event_id=event_id, filename=fname
+                                ).first() is not None
+
                             photo = ingest_photo(
                                 event_id=event_id,
                                 photographer_id=photographer_id,
@@ -97,17 +110,12 @@ def batch_ingest_zips(
                                 job=None,
                             )
 
-                            if photo.uploaded_at and photo.uploaded_at.timestamp() > 0:
-                                # SHA-256 duplicate detection check
-                                if getattr(photo, "_is_duplicate", False):
-                                    total_skipped += 1
-                                    status_str = "SKIPPED (Duplicate)"
-                                else:
-                                    total_new += 1
-                                    status_str = "NEW -> Saved & Vector Indexed"
-                            else:
+                            if is_dup:
                                 total_skipped += 1
-                                status_str = "SKIPPED"
+                                status_str = "SKIPPED (Duplicate)"
+                            else:
+                                total_new += 1
+                                status_str = "NEW -> Saved & Indexed"
 
                             if i_idx % 10 == 0 or i_idx == len(img_entries):
                                 print(f"  [{i_idx}/{len(img_entries)}] {fname} -> {status_str}")
