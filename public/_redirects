@@ -1,3 +1,0 @@
-/api/*  https://rubicon.up.railway.app/api/:splat  200
-/media/*  https://rubicon.up.railway.app/media/:splat  200
-/*  /index.html  200
