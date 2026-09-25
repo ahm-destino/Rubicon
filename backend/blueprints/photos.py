@@ -2,9 +2,10 @@
 import requests as http
 from flask import Blueprint, jsonify, request
 
+from sqlalchemy.orm import joinedload, selectinload
 from auth_utils import admin_required
 from extensions import db
-from models import Event, IngestionJob, Photo
+from models import Event, FaceDetection, IngestionJob, Photo
 from services.ids import new_id
 from services.ingest import ingest_photo
 from services.storage import delete_image
@@ -21,7 +22,14 @@ def list_photos(event_id):
     page = max(1, int(request.args.get("page", 1)))
     page_size = min(10000, int(request.args.get("pageSize", 5000)))
 
-    query = Photo.query.filter_by(event_id=event_id)
+    query = (
+        Photo.query
+        .options(
+            selectinload(Photo.faces).selectinload(FaceDetection.participant),
+            joinedload(Photo.photographer),
+        )
+        .filter_by(event_id=event_id)
+    )
     if session and session != "All Sessions":
         query = query.filter(Photo.session_tag == session)
     if photographer_id:
