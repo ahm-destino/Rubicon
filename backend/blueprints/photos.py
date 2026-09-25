@@ -19,7 +19,7 @@ def list_photos(event_id):
     q = (request.args.get("q") or "").strip().lower()
     sort = request.args.get("sort", "newest")
     page = max(1, int(request.args.get("page", 1)))
-    page_size = min(1000, int(request.args.get("pageSize", 100)))
+    page_size = min(10000, int(request.args.get("pageSize", 5000)))
 
     query = Photo.query.filter_by(event_id=event_id)
     if session and session != "All Sessions":
