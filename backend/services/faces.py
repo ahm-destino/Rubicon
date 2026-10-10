@@ -34,7 +34,6 @@ class DetectedFace:
 
 _APP = None
 _LOCK = threading.Lock()
-_INFERENCE_LOCK = threading.BoundedSemaphore(Config.FACE_MAX_CONCURRENT)
 
 
 def _get_app():
@@ -71,11 +70,6 @@ def warm_up():
 
 def _to_bgr(raw: bytes) -> np.ndarray:
     img = Image.open(io.BytesIO(raw))
-    if img.width * img.height > Config.MAX_IMAGE_PIXELS:
-        raise ValueError(
-            f"Image has too many pixels ({img.width}x{img.height}); "
-            f"limit is {Config.MAX_IMAGE_PIXELS:,} pixels"
-        )
     img = ImageOps.exif_transpose(img).convert("RGB")
     # Downscale image to max 640px on CPU containers to keep ONNX tensor memory tiny
     max_dim = 640 if not Config.FACE_USE_GPU else 1280
@@ -87,24 +81,21 @@ def _to_bgr(raw: bytes) -> np.ndarray:
 
 def detect_faces(raw: bytes):
     """Return a list[DetectedFace] for every face in the image bytes."""
-    # ONNX and image conversion allocate sizeable temporary buffers. Serialize
-    # them so concurrent requests do not push a 500 MB worker into OOM.
-    with _INFERENCE_LOCK:
-        app = _get_app()
-        bgr = _to_bgr(raw)
-        h, w = bgr.shape[:2]
-        out = []
-        for f in app.get(bgr):
-            emb = np.asarray(f.normed_embedding, dtype=np.float32)
-            x1, y1, x2, y2 = f.bbox
-            box = {
-                "x": max(0.0, float(x1) / w * 100.0),
-                "y": max(0.0, float(y1) / h * 100.0),
-                "width": float(x2 - x1) / w * 100.0,
-                "height": float(y2 - y1) / h * 100.0,
-            }
-            out.append(DetectedFace(emb, box, float(f.det_score)))
-        return out
+    app = _get_app()
+    bgr = _to_bgr(raw)
+    h, w = bgr.shape[:2]
+    out = []
+    for f in app.get(bgr):
+        emb = np.asarray(f.normed_embedding, dtype=np.float32)
+        x1, y1, x2, y2 = f.bbox
+        box = {
+            "x": max(0.0, float(x1) / w * 100.0),
+            "y": max(0.0, float(y1) / h * 100.0),
+            "width": float(x2 - x1) / w * 100.0,
+            "height": float(y2 - y1) / h * 100.0,
+        }
+        out.append(DetectedFace(emb, box, float(f.det_score)))
+    return out
 
 
 def embed_selfie(raw: bytes):
@@ -115,3 +106,4 @@ def embed_selfie(raw: bytes):
     # Largest box == closest / most prominent face.
     faces.sort(key=lambda f: f.box["width"] * f.box["height"], reverse=True)
     return faces[0].embedding
+

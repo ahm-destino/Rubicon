@@ -67,11 +67,7 @@ class Config:
     }
 
     # Uploads
-    # A large request can require several times its on-disk size while Pillow
-    # decodes it, so keep the HTTP body modest on small web instances.
-    MAX_CONTENT_LENGTH = int(os.getenv("MAX_UPLOAD_MB", "20")) * 1024 * 1024
-    MAX_IMAGE_PIXELS = int(os.getenv("MAX_IMAGE_PIXELS", "20000000"))
-    IMAGE_ORIG_MAX_SIDE = int(os.getenv("IMAGE_ORIG_MAX_SIDE", "2560"))
+    MAX_CONTENT_LENGTH = int(os.getenv("MAX_UPLOAD_MB", "200")) * 1024 * 1024
 
     # Storage abstraction
     STORAGE_BACKEND = os.getenv("STORAGE_BACKEND", "local")
@@ -86,8 +82,6 @@ class Config:
     FACE_EMBED_DIM = int(os.getenv("FACE_EMBED_DIM", "512"))
     FACE_MATCH_THRESHOLD = float(os.getenv("FACE_MATCH_THRESHOLD", "0.35"))
     FACE_USE_GPU = _bool("FACE_USE_GPU")
-    FACE_PREWARM = _bool("FACE_PREWARM")
-    FACE_MAX_CONCURRENT = max(1, int(os.getenv("FACE_MAX_CONCURRENT", "1")))
 
     # Google OAuth
     GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")

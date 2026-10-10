@@ -61,8 +61,8 @@ def create_app():
                    picker, search, downloads, stats, storage):
         app.register_blueprint(module.bp)
 
-    # Opt-in: a 500 MB instance needs boot-time headroom before loading ONNX.
-    if Config.FACE_PREWARM and (os.getenv("SERVER_SOFTWARE", "").startswith("gunicorn") or os.getenv("FLASK_RUN_FROM_CLI") != "true"):
+    # Pre-warm AI model asynchronously on web server boot (skip during CLI commands like init-db/seed)
+    if os.getenv("SERVER_SOFTWARE", "").startswith("gunicorn") or os.getenv("FLASK_RUN_FROM_CLI") != "true":
         import threading
         from services import faces
         threading.Thread(target=faces.warm_up, daemon=True).start()
