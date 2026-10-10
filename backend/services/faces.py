@@ -9,7 +9,15 @@ The model is lazy-loaded (heavy import on first call) so the Flask app and
 `flask db` migrations boot without touching ML.
 """
 import io
+import os
 import threading
+
+# Limit OpenMP/BLAS thread allocation for ONNXRuntime on low-memory containers (Railway 512MB RAM)
+os.environ["OMP_NUM_THREADS"] = "1"
+os.environ["OPENBLAS_NUM_THREADS"] = "1"
+os.environ["MKL_NUM_THREADS"] = "1"
+os.environ["VECLIB_MAXIMUM_THREADS"] = "1"
+os.environ["NUMEXPR_NUM_THREADS"] = "1"
 
 import numpy as np
 from PIL import Image, ImageOps
@@ -40,9 +48,8 @@ def _get_app():
                     if Config.FACE_USE_GPU
                     else ["CPUExecutionProvider"]
                 )
-                import os
-                det_dim = int(os.getenv("FACE_DET_SIZE", "320" if not Config.FACE_USE_GPU else "640"))
-                # Load only detection + recognition modules (cuts RAM usage from 600MB to ~150MB, preventing Railway OOM SIGKILL)
+                det_dim = int(os.getenv("FACE_DET_SIZE", "224" if not Config.FACE_USE_GPU else "640"))
+                # Load only detection + recognition modules (cuts RAM usage to ~150MB)
                 app = FaceAnalysis(
                     name=Config.FACE_MODEL,
                     allowed_modules=["detection", "recognition"],
@@ -64,8 +71,8 @@ def warm_up():
 def _to_bgr(raw: bytes) -> np.ndarray:
     img = Image.open(io.BytesIO(raw))
     img = ImageOps.exif_transpose(img).convert("RGB")
-    # Downscale oversized images (e.g. 12MP phone photos) to max 1280px for fast CPU detection
-    max_dim = 1280
+    # Downscale image to max 640px on CPU containers to keep ONNX tensor memory tiny
+    max_dim = 640 if not Config.FACE_USE_GPU else 1280
     if max(img.width, img.height) > max_dim:
         img.thumbnail((max_dim, max_dim), Image.Resampling.LANCZOS)
     arr = np.array(img)  # RGB
