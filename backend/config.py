@@ -78,7 +78,7 @@ class Config:
     GCS_BUCKET = os.getenv("GCS_BUCKET", "")
 
     # Face recognition
-    FACE_MODEL = os.getenv("FACE_MODEL", "buffalo_s" if not _bool("FACE_USE_GPU") else "buffalo_l")
+    FACE_MODEL = os.getenv("FACE_MODEL", "buffalo_sc" if not _bool("FACE_USE_GPU") else "buffalo_l")
     FACE_EMBED_DIM = int(os.getenv("FACE_EMBED_DIM", "512"))
     FACE_MATCH_THRESHOLD = float(os.getenv("FACE_MATCH_THRESHOLD", "0.35"))
     FACE_USE_GPU = _bool("FACE_USE_GPU")
