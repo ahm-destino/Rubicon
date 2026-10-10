@@ -42,11 +42,9 @@ def batch_ingest_zips(
                 return
             photographer_id = photographer.id
 
+        # Process only archives explicitly selected by the supplied pattern.
+        # Falling back to every ZIP in Downloads risks importing unrelated work.
         zip_paths = sorted(glob.glob(os.path.join(downloads_dir, pattern)))
-        if not zip_paths:
-            # Fallback to searching for all .zip files if pattern has no match
-            zip_paths = sorted(glob.glob(os.path.join(downloads_dir, "*.zip")))
-
         if not zip_paths:
             print(f"No ZIP files found matching '{pattern}' in {downloads_dir}")
             return

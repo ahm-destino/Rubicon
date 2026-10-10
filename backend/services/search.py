@@ -37,18 +37,34 @@ def search_by_embedding(event_id: str, embedding: np.ndarray, limit: int = 60,
         .all()
     )
 
-    # Cosine similarity in NumPy. Embeddings are L2-normalized at ingest, but we
-    # renormalize defensively so the cosine score is exact regardless of source.
-    scored = []
+    # Vectorized cosine similarity using 2D NumPy matrix dot product.
+    valid_faces = []
+    matrix_list = []
     for face in rows:
-        vec = np.asarray(face.embedding, dtype=np.float32).ravel()
-        norm = np.linalg.norm(vec)
-        if norm == 0:
-            continue
-        similarity = float(np.dot(query_vec, vec / norm))
-        scored.append((face, similarity))
+        if face.embedding and len(face.embedding) > 0:
+            valid_faces.append(face)
+            matrix_list.append(face.embedding)
 
-    # Nearest-first, take top-k, then apply the similarity threshold — same
-    # ordering/limit semantics as the previous SQL (ORDER BY distance LIMIT k).
-    scored.sort(key=lambda pair: pair[1], reverse=True)
-    return [(face, sim) for face, sim in scored[:limit] if sim >= threshold]
+    if not matrix_list:
+        return []
+
+    # Convert to 2D numpy array shape (N, dim)
+    matrix = np.array(matrix_list, dtype=np.float32)
+
+    # Normalize matrix rows defensively
+    norms = np.linalg.norm(matrix, axis=1, keepdims=True)
+    norms[norms == 0] = 1.0
+    norm_matrix = matrix / norms
+
+    # Matrix-vector dot product (C/BLAS accelerated) -> shape (N,)
+    similarities = np.dot(norm_matrix, query_vec)
+
+    # Filter by threshold and take top-k
+    valid_mask = similarities >= threshold
+    if not np.any(valid_mask):
+        return []
+
+    matching_indices = np.where(valid_mask)[0]
+    sorted_indices = matching_indices[np.argsort(-similarities[matching_indices])[:limit]]
+
+    return [(valid_faces[idx], float(similarities[idx])) for idx in sorted_indices]

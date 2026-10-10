@@ -61,6 +61,11 @@ def create_app():
                    picker, search, downloads, stats, storage):
         app.register_blueprint(module.bp)
 
+    # Pre-warm AI face recognition model asynchronously on startup
+    import threading
+    from services import faces
+    threading.Thread(target=faces.warm_up, daemon=True).start()
+
 
     @app.get("/api/health")
     def health():

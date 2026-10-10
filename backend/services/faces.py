@@ -9,6 +9,7 @@ The model is lazy-loaded (heavy import on first call) so the Flask app and
 `flask db` migrations boot without touching ML.
 """
 import io
+import threading
 
 import numpy as np
 from PIL import Image, ImageOps
@@ -24,27 +25,42 @@ class DetectedFace:
 
 
 _APP = None
+_LOCK = threading.Lock()
 
 
 def _get_app():
     global _APP
     if _APP is None:
-        from insightface.app import FaceAnalysis  # lazy, heavy
+        with _LOCK:
+            if _APP is None:
+                from insightface.app import FaceAnalysis  # lazy, heavy
 
-        providers = (
-            ["CUDAExecutionProvider", "CPUExecutionProvider"]
-            if Config.FACE_USE_GPU
-            else ["CPUExecutionProvider"]
-        )
-        app = FaceAnalysis(name=Config.FACE_MODEL, providers=providers)
-        app.prepare(ctx_id=0 if Config.FACE_USE_GPU else -1, det_size=(640, 640))
-        _APP = app
+                providers = (
+                    ["CUDAExecutionProvider", "CPUExecutionProvider"]
+                    if Config.FACE_USE_GPU
+                    else ["CPUExecutionProvider"]
+                )
+                app = FaceAnalysis(name=Config.FACE_MODEL, providers=providers)
+                app.prepare(ctx_id=0 if Config.FACE_USE_GPU else -1, det_size=(640, 640))
+                _APP = app
     return _APP
+
+
+def warm_up():
+    """Asynchronously or synchronously pre-warm the model."""
+    try:
+        _get_app()
+    except Exception as e:
+        print(f"[faces] Warm-up warning: {e}")
 
 
 def _to_bgr(raw: bytes) -> np.ndarray:
     img = Image.open(io.BytesIO(raw))
     img = ImageOps.exif_transpose(img).convert("RGB")
+    # Downscale oversized images (e.g. 12MP phone photos) to max 1280px for fast CPU detection
+    max_dim = 1280
+    if max(img.width, img.height) > max_dim:
+        img.thumbnail((max_dim, max_dim), Image.Resampling.LANCZOS)
     arr = np.array(img)  # RGB
     return arr[:, :, ::-1].copy()  # -> BGR for insightface
 
@@ -76,3 +92,4 @@ def embed_selfie(raw: bytes):
     # Largest box == closest / most prominent face.
     faces.sort(key=lambda f: f.box["width"] * f.box["height"], reverse=True)
     return faces[0].embedding
+

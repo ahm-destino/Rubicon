@@ -67,3 +67,10 @@ Events `/api/events[/<id>[/stats]]` · Photographers
 `/api/events/<id>/{google-accounts,albums}`, `/api/google/accounts/<id>` ·
 Downloads `/api/photos/<id>/download`, `/api/events/<id>/download/zip` · Stats
 `/api/events/<id>/storage` · Media `/media/<event>/<file>` · Health `/api/health`
+
+## To start the Ingest_zips.py script
+
+```bash
+cd backend
+.\.venv\Scripts\python.exe ingest_zips.py --dir "C:\Users\LENOVO\Downloads" --pattern "ASLA*.zip"
+```
