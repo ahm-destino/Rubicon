@@ -40,8 +40,10 @@ def _get_app():
                     if Config.FACE_USE_GPU
                     else ["CPUExecutionProvider"]
                 )
+                import os
+                det_dim = int(os.getenv("FACE_DET_SIZE", "320" if not Config.FACE_USE_GPU else "640"))
                 app = FaceAnalysis(name=Config.FACE_MODEL, providers=providers)
-                app.prepare(ctx_id=0 if Config.FACE_USE_GPU else -1, det_size=(640, 640))
+                app.prepare(ctx_id=0 if Config.FACE_USE_GPU else -1, det_size=(det_dim, det_dim))
                 _APP = app
     return _APP
 

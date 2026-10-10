@@ -49,7 +49,13 @@ def search_selfie(event_id):
     if not raw:
         return jsonify({"error": "no selfie provided"}), 400
 
-    embedding = embed_selfie(raw)
+    try:
+        embedding = embed_selfie(raw)
+    except Exception as e:
+        import logging
+        logging.error(f"Error embedding selfie: {e}", exc_info=True)
+        return jsonify({"error": "Failed to process selfie face detection", "details": str(e)}), 500
+
     if embedding is None:
         return jsonify({"error": "no face detected in selfie", "results": []}), 422
 
