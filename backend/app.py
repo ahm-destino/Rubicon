@@ -61,10 +61,11 @@ def create_app():
                    picker, search, downloads, stats, storage):
         app.register_blueprint(module.bp)
 
-    # Pre-warm AI face recognition model asynchronously on startup
-    import threading
-    from services import faces
-    threading.Thread(target=faces.warm_up, daemon=True).start()
+    # Pre-warm AI model asynchronously on web server boot (skip during CLI commands like init-db/seed)
+    if os.getenv("SERVER_SOFTWARE", "").startswith("gunicorn") or os.getenv("FLASK_RUN_FROM_CLI") != "true":
+        import threading
+        from services import faces
+        threading.Thread(target=faces.warm_up, daemon=True).start()
 
 
     @app.get("/api/health")
