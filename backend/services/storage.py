@@ -169,21 +169,27 @@ def save_image(raw: bytes, event_id: str, filename: str) -> StorageResult:
     Uploads to the event's active Google Drive account when one is connected,
     otherwise falls back to local disk (unchanged behavior).
 
-    Large DSLR images (45 MP+) are capped at ORIG_MAX on the longest side so
-    Pillow does not exhaust the process heap while encoding the JPEG buffers.
+    The stored original is capped on small deployments. Retaining a 45 MP
+    decoded image plus JPEG buffers is not viable in a 500 MB process.
     """
     # Raise Pillow's decompression-bomb threshold for legitimate large photos
-    Image.MAX_IMAGE_PIXELS = 250_000_000   # ~250 MP; blocks truly malicious files
+    Image.MAX_IMAGE_PIXELS = Config.MAX_IMAGE_PIXELS
 
     img = Image.open(io.BytesIO(raw))
+    if img.width * img.height > Config.MAX_IMAGE_PIXELS:
+        raise ValueError(
+            f"Image has too many pixels ({img.width}x{img.height}); "
+            f"limit is {Config.MAX_IMAGE_PIXELS:,} pixels"
+        )
     exif = _extract_exif(img)           # read metadata before RGB-flattening drops it
     img = ImageOps.exif_transpose(img)  # rotate pixel matrix per EXIF orientation tag
     img = img.convert("RGB")
     width, height = img.size
+    img = _resize(img, Config.IMAGE_ORIG_MAX_SIDE)
     key = new_id("gphotos_media")
 
     try:
-        orig_bytes  = _encode(img, None,      95)  # full original resolution
+        orig_bytes  = _encode(img, None,      95)
         web_bytes   = _encode(img, WEB_MAX,   88)
         thumb_bytes = _encode(img, THUMB_MAX, 80)
     except (MemoryError, OSError) as exc:
