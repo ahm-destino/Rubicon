@@ -1,5 +1,5 @@
 """
-Face detection + embedding with InsightFace, running in-process.
+Face detection + embedding with InsightFace, locally or through the Face API.
 
 detect_faces() / embed_selfie() are the public interface used by
 services/ingest.py and blueprints/search.py. Embeddings are 512-d and
@@ -20,6 +20,7 @@ os.environ["VECLIB_MAXIMUM_THREADS"] = "1"
 os.environ["NUMEXPR_NUM_THREADS"] = "1"
 
 import numpy as np
+import requests
 from PIL import Image, ImageOps
 
 from config import Config
@@ -34,6 +35,10 @@ class DetectedFace:
 
 _APP = None
 _LOCK = threading.Lock()
+
+
+class FaceServiceError(RuntimeError):
+    """The remote face service could not process an image."""
 
 
 def _get_app():
@@ -62,6 +67,10 @@ def _get_app():
 
 def warm_up():
     """Asynchronously or synchronously pre-warm the model."""
+    # With a remote service configured, the web process must never import the
+    # model as that defeats the purpose of splitting inference out.
+    if Config.FACE_API_URL:
+        return
     try:
         _get_app()
     except Exception as e:
@@ -81,6 +90,9 @@ def _to_bgr(raw: bytes) -> np.ndarray:
 
 def detect_faces(raw: bytes):
     """Return a list[DetectedFace] for every face in the image bytes."""
+    if Config.FACE_API_URL:
+        return _detect_remote(raw)
+
     app = _get_app()
     bgr = _to_bgr(raw)
     h, w = bgr.shape[:2]
@@ -96,6 +108,42 @@ def detect_faces(raw: bytes):
         }
         out.append(DetectedFace(emb, box, float(f.det_score)))
     return out
+
+
+def _detect_remote(raw: bytes):
+    """Use the isolated Face API while preserving the local result contract."""
+    if not Config.FACE_API_TOKEN:
+        raise FaceServiceError("FACE_API_TOKEN must be set when FACE_API_URL is configured")
+
+    try:
+        response = requests.post(
+            f"{Config.FACE_API_URL}/detect",
+            files={"image": ("image.jpg", raw, "application/octet-stream")},
+            headers={"X-Face-Api-Token": Config.FACE_API_TOKEN},
+            timeout=Config.FACE_API_TIMEOUT,
+        )
+    except requests.RequestException as exc:
+        raise FaceServiceError("Face API is unavailable") from exc
+
+    if not response.ok:
+        try:
+            message = response.json().get("error", response.text)
+        except ValueError:
+            message = response.text
+        raise FaceServiceError(f"Face API rejected the image: {message}")
+
+    try:
+        payload = response.json()
+        return [
+            DetectedFace(
+                np.asarray(face["embedding"], dtype=np.float32),
+                face["box"],
+                float(face["confidence"]),
+            )
+            for face in payload["faces"]
+        ]
+    except (KeyError, TypeError, ValueError) as exc:
+        raise FaceServiceError("Face API returned an invalid response") from exc
 
 
 def embed_selfie(raw: bytes):

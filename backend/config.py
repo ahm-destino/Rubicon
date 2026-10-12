@@ -82,6 +82,12 @@ class Config:
     FACE_EMBED_DIM = int(os.getenv("FACE_EMBED_DIM", "512"))
     FACE_MATCH_THRESHOLD = float(os.getenv("FACE_MATCH_THRESHOLD", "0.35"))
     FACE_USE_GPU = _bool("FACE_USE_GPU")
+    # Optional remote inference service. Leave blank in local development to
+    # retain in-process inference; set this in Railway to keep ML out of the
+    # constrained web container.
+    FACE_API_URL = os.getenv("FACE_API_URL", "").rstrip("/")
+    FACE_API_TOKEN = os.getenv("FACE_API_TOKEN", "")
+    FACE_API_TIMEOUT = int(os.getenv("FACE_API_TIMEOUT", "90"))
 
     # Google OAuth
     GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
