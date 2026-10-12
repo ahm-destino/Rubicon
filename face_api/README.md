@@ -16,8 +16,6 @@ It has no database and should not receive public traffic.
    FACE_MODEL=buffalo_sc
    FACE_USE_GPU=0
    FACE_DET_SIZE=224
-   MAX_UPLOAD_MB=20
-   MAX_IMAGE_PIXELS=20000000
    FACE_API_TOKEN=<a-long-random-secret>
    ```
 

@@ -22,12 +22,14 @@ from flask import Flask, jsonify, request
 from PIL import Image, ImageOps, UnidentifiedImageError
 
 app = Flask(__name__)
-app.config["MAX_CONTENT_LENGTH"] = int(os.getenv("MAX_UPLOAD_MB", "20")) * 1024 * 1024
+# The application downsizes images before inference, so do not reject a valid
+# camera photo merely because its original file or pixel dimensions are large.
+# Disable Pillow's decompression-bomb ceiling for the same reason.
+Image.MAX_IMAGE_PIXELS = None
 
 MODEL_NAME = os.getenv("FACE_MODEL", "buffalo_sc")
 USE_GPU = os.getenv("FACE_USE_GPU", "0").lower() in {"1", "true", "yes", "on"}
 DET_SIZE = int(os.getenv("FACE_DET_SIZE", "640" if USE_GPU else "224"))
-MAX_IMAGE_PIXELS = int(os.getenv("MAX_IMAGE_PIXELS", "20000000"))
 TOKEN = os.getenv("FACE_API_TOKEN", "")
 
 _model = None
@@ -65,8 +67,6 @@ def _to_bgr(raw: bytes) -> np.ndarray:
     except UnidentifiedImageError as exc:
         raise ValueError("image is not a supported image file") from exc
 
-    if image.width * image.height > MAX_IMAGE_PIXELS:
-        raise ValueError(f"image exceeds the {MAX_IMAGE_PIXELS:,}-pixel limit")
     image = ImageOps.exif_transpose(image).convert("RGB")
     if max(image.width, image.height) > 640:
         image.thumbnail((640, 640), Image.Resampling.LANCZOS)
