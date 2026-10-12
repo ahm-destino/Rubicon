@@ -73,9 +73,15 @@ def _to_bgr(raw: bytes) -> np.ndarray:
     return np.array(image)[:, :, ::-1].copy()
 
 
+def _health_response():
+    return jsonify({"status": "ok", "model": MODEL_NAME, "loaded": _model is not None})
+
+
+@app.get("/")
 @app.get("/health")
 def health():
-    return jsonify({"status": "ok", "model": MODEL_NAME, "loaded": _model is not None})
+    """Health endpoint for Render and private-service probes."""
+    return _health_response()
 
 
 @app.post("/detect")

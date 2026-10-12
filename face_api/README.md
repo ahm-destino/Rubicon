@@ -20,14 +20,16 @@ It has no database and should not receive public traffic.
    ```
 
 4. Do not generate a public domain for this service. It is called privately by
-   the Rubicon backend. After deployment, `GET /health` is available inside the
-   Railway project and reports whether the model is loaded.
+   the Rubicon backend. After deployment, `GET /` and `GET /health` both
+   report whether the model is loaded. For Render, set the health-check path
+   to `/health` (or leave the default `/`).
 5. On the existing Rubicon backend service, add:
 
    ```env
    FACE_API_URL=http://${{face-api.RAILWAY_PRIVATE_DOMAIN}}:${{face-api.PORT}}
    FACE_API_TOKEN=<the-exact-same-long-random-secret>
-   FACE_API_TIMEOUT=90
+   # Allow the initial InsightFace model download/load after a deployment.
+   FACE_API_TIMEOUT=600
    ```
 
    Replace `face-api` with the exact Railway service name if you choose a
