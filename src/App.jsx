@@ -129,15 +129,29 @@ export default function App() {
   }
 
   if (error || !currentEvent) {
+    const hasError = Boolean(error);
+
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-[#F8FAFC] text-center px-6">
-        <h1 className="text-xl font-extrabold text-slate-900 font-display">Rubicon backend not reachable</h1>
-        <p className="mt-2 text-sm text-slate-500 max-w-md">
-          {error || 'No events found.'} Start the Flask backend (see backend/README.md):
-          <code className="block mt-3 bg-slate-900 text-slate-100 rounded-lg px-3 py-2 text-left">
-            flask --app app init-db && flask --app app seed && flask --app app run -p 5000
-          </code>
+        <h1 className="text-2xl font-extrabold text-slate-900 font-display">
+          {hasError ? 'Unable to load Rubicon events' : 'No events yet'}
+        </h1>
+
+        <p className="mt-3 text-sm text-slate-500 max-w-md">
+          {hasError
+            ? `The events request failed: ${error}`
+            : 'Rubicon is connected to the backend, but no events have been created in this environment yet.'}
         </p>
+
+        {hasError && (
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            className="mt-5 rounded-lg bg-indigo-600 px-5 py-2 text-sm font-medium text-white hover:bg-indigo-700"
+          >
+            Retry
+          </button>
+        )}
       </div>
     );
   }
