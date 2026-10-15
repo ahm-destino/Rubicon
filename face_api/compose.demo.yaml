@@ -1,0 +1,64 @@
+name: rubicon-demo
+
+services:
+
+  postgres:
+    image: postgres:16-alpine
+    env_file:
+      - ./postgres.env.demo
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rubicon -d rubicon"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  face-api:
+    image: rubicon-face-api:local
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file:
+      - ./.env
+    environment:
+      FACE_USE_GPU: "0"
+      FACE_DET_SIZE: "224"
+    volumes:
+      - face_models:/home/appuser/.insightface
+    mem_limit: 3g
+    cpus: 2
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+  backend:
+    image: rubicon-backend:local
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    env_file:
+      - ../backend/.env.demo
+      - ./.env
+    environment:
+      FACE_API_URL: http://face-api:8080
+      FACE_API_TIMEOUT: "600"
+    ports:
+      - "127.0.0.1:5001:5000"
+    volumes:
+      - media_data:/app/storage
+    depends_on:
+      postgres:
+        condition: service_healthy
+      face-api:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  media_data:
+  face_models:
+    name: rubicon-demo-face-models

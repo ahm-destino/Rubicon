@@ -25,7 +25,8 @@ app = Flask(__name__)
 # The application downsizes images before inference, so do not reject a valid
 # camera photo merely because its original file or pixel dimensions are large.
 # Disable Pillow's decompression-bomb ceiling for the same reason.
-Image.MAX_IMAGE_PIXELS = None
+Image.MAX_IMAGE_PIXELS = 60_000_000
+app.config["MAX_CONTENT_LENGTH"] = 25 * 1024 * 1024
 
 MODEL_NAME = os.getenv("FACE_MODEL", "buffalo_sc")
 USE_GPU = os.getenv("FACE_USE_GPU", "0").lower() in {"1", "true", "yes", "on"}

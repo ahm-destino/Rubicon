@@ -1,0 +1,73 @@
+#!/bin/bash
+set -euxo pipefail
+
+export DEBIAN_FRONTEND=noninteractive
+
+# Schedule automatic demo termination before installing packages.
+
+cat > /etc/systemd/system/rubicon-expire.service <<'UNIT'
+[Unit]
+Description=Terminate temporary Rubicon EC2 demo
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/systemctl poweroff
+UNIT
+
+EXPIRY=$(date -u -d '+24 hours' '+%Y-%m-%d %H:%M:%S UTC')
+
+cat > /etc/systemd/system/rubicon-expire.timer <<UNIT
+[Unit]
+Description=Rubicon demo expiry timer
+
+[Timer]
+OnCalendar=$EXPIRY
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+UNIT
+
+systemctl daemon-reload
+systemctl enable --now rubicon-expire.timer
+
+# Install Docker Engine and Compose plugin.
+
+apt-get update
+
+apt-get install -y \
+  ca-certificates curl git rsync
+
+install -m 0755 -d /etc/apt/keyrings
+
+curl -fsSL \
+  https://download.docker.com/linux/ubuntu/gpg \
+  -o /etc/apt/keyrings/docker.asc
+
+chmod a+r /etc/apt/keyrings/docker.asc
+
+. /etc/os-release
+
+cat > /etc/apt/sources.list.d/docker.sources <<DOCKER
+Types: deb
+URIs: https://download.docker.com/linux/ubuntu
+Suites: ${VERSION_CODENAME}
+Components: stable
+Architectures: $(dpkg --print-architecture)
+Signed-By: /etc/apt/keyrings/docker.asc
+DOCKER
+
+apt-get update
+
+apt-get install -y \
+  docker-ce \
+  docker-ce-cli \
+  containerd.io \
+  docker-buildx-plugin \
+  docker-compose-plugin
+
+systemctl enable --now docker
+
+mkdir -p /opt/rubicon
+
+echo "Rubicon bootstrap completed"

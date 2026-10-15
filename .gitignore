@@ -20,3 +20,15 @@ backend/storage/
 
 # Claude Code local-only settings
 .claude/settings.local.json
+
+/face_api/.env
+/backend/.env.demo
+/face_api/postgres.env.demo
+
+# Terraform local and sensitive files
+**/.terraform/
+**/*.tfstate
+**/*.tfstate.*
+**/*.tfvars
+**/*.tfplan
+**/crash.log

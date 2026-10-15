@@ -1,0 +1,17 @@
+{$API_HOST} {
+    encode gzip
+
+    request_body {
+        max_size 25MB
+    }
+
+    @backend path /api/* /media/*
+
+    handle @backend {
+        reverse_proxy backend:5000
+    }
+
+    handle {
+        respond "Not Found" 404
+    }
+}
