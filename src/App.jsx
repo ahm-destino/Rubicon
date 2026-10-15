@@ -4,6 +4,7 @@ import { api } from './api';
 import { Navbar } from './components/Navbar';
 import { ParticipantFinder } from './components/ParticipantFinder';
 import { AdminPanel } from './components/AdminPanel';
+import { FirstEventSetup } from './components/admin/FirstEventSetup';
 import { EventGallery } from './components/EventGallery';
 import { PhotoLightbox } from './components/PhotoLightbox';
 import { ArchitectureModal } from './components/ArchitectureModal';
@@ -128,7 +129,7 @@ export default function App() {
     );
   }
 
-  if (error || !currentEvent) {
+  if (error || (!currentEvent && currentRole !== 'admin')) {
     const hasError = Boolean(error);
 
     return (
@@ -154,6 +155,10 @@ export default function App() {
         )}
       </div>
     );
+  }
+
+  if (!currentEvent && currentRole === 'admin') {
+    return <FirstEventSetup onEventsChanged={loadEvents} />;
   }
 
   return (
