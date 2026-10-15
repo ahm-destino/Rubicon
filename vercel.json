@@ -2,11 +2,11 @@
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "https://rubicon.up.railway.app/api/:path*"
+      "destination": "https://16-192-169-152.sslip.io/api/:path*"
     },
     {
       "source": "/media/:path*",
-      "destination": "https://rubicon.up.railway.app/media/:path*"
+      "destination": "https://16-192-169-152.sslip.io/media/:path*"
     },
     {
       "source": "/(.*)",
@@ -14,4 +14,3 @@
     }
   ]
 }
-
