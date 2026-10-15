@@ -11,6 +11,11 @@
         reverse_proxy backend:5000
     }
 
+    @face_detect path /detect
+    handle @face_detect {
+        reverse_proxy face-api:8080
+    }
+
     handle {
         respond "Not Found" 404
     }
