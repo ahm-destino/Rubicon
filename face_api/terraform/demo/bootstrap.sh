@@ -3,34 +3,6 @@ set -euxo pipefail
 
 export DEBIAN_FRONTEND=noninteractive
 
-# Schedule automatic demo termination before installing packages.
-
-cat > /etc/systemd/system/rubicon-expire.service <<'UNIT'
-[Unit]
-Description=Terminate temporary Rubicon EC2 demo
-
-[Service]
-Type=oneshot
-ExecStart=/usr/bin/systemctl poweroff
-UNIT
-
-EXPIRY=$(date -u -d '+24 hours' '+%Y-%m-%d %H:%M:%S UTC')
-
-cat > /etc/systemd/system/rubicon-expire.timer <<UNIT
-[Unit]
-Description=Rubicon demo expiry timer
-
-[Timer]
-OnCalendar=$EXPIRY
-Persistent=true
-
-[Install]
-WantedBy=timers.target
-UNIT
-
-systemctl daemon-reload
-systemctl enable --now rubicon-expire.timer
-
 # Install Docker Engine and Compose plugin.
 
 apt-get update
